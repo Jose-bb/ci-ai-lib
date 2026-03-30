@@ -2,7 +2,7 @@ import os
 from typing import Optional
 from llm_interfaces.base import LLMInterface
 from llm_interfaces.azure_openai import AzureOpenAIAdapter
-from llm_interfaces.gemini import GeminiAdapter
+# from llm_interfaces.gemini import GeminiAdapter
 
 class LLMFactory:
     '''
@@ -27,9 +27,9 @@ class LLMFactory:
                 api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2023-12-01-preview"),
                 azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT")
             )
-        elif provider == "gemini":
-            return GeminiAdapter(
-                api_key=os.getenv("GEMINI_API_KEY")
-            )
+        # elif provider == "gemini":
+        #     return GeminiAdapter(
+        #         api_key=os.getenv("GEMINI_API_KEY")
+        #     )
         else:
             raise ValueError(f"Unknown LLM provider: {provider}")
