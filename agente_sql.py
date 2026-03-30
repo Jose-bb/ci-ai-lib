@@ -1,6 +1,6 @@
 import sqlite3
 import os
-from azure_openai_adapter import AzureOpenAIAdapter
+from llm_interfaces.factory import LLMFactory
 
 def obtener_esquema_db(db_path):
     """Función que extrae los nombres de tablas y columnas para la IA"""
