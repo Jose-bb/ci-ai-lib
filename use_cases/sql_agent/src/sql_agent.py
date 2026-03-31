@@ -15,7 +15,7 @@ class SQLAgent:
         """
         self.db_path = db_path
         self.llm = LLMFactory.get_llm(provider)
-        self.model_name = os.getenv("AZURE_OPENAI_MODEL", "devlab-gpt-4o-mini")
+        self.model_name = "devlab-gpt-4o-mini"
         
         self.db_schema = self._extract_schema()
 
@@ -66,9 +66,12 @@ class SQLAgent:
         Use ONLY the following tables and columns:
         {self.db_schema}
 
+        IMPORTANT RULES:
+        - If the user asks for a person by their first name (e.g., "Carlos"), use the SQL LIKE operator with wildcards (e.g., LIKE '%Carlos%') because the database contains full names (first and last names together).
+
         Respond ONLY with the raw SQL query. Do not include markdown blocks, explanations, or quotes.
         """
-
+        
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_question}
