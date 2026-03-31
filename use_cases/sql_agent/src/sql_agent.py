@@ -44,7 +44,7 @@ class SQLAgent:
         except sqlite3.Error as e:
             return f"Error extracting schema: {e}"
 
-    def _execute_sql(self, query: str) -> List[Tuple]:
+    def _execute_sql(self, query: str) -> Tuple[List[Tuple], str]:
         """
         Private method to execute a raw SQL query and fetch results.
         """
@@ -52,10 +52,11 @@ class SQLAgent:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 cursor.execute(query)
-                return cursor.fetchall()
+                return cursor.fetchall(), ""
         except sqlite3.Error as e:
-            print(f"[Error] SQL Execution failed: {e}")
-            return []
+            error_msg = str(e)
+            print(f"[Error] SQL Execution failed: {error_msg}")
+            return [], error_msg
 
     def process_question(self, user_question: str) -> Dict[str, Any]:
         """
@@ -80,13 +81,21 @@ class SQLAgent:
         generated_sql = self.llm.invoke(messages=messages, model=self.model_name).strip()
         
         results = []
+        error_message = ""
+
         if generated_sql.upper().startswith("SELECT"):
-            results = self._execute_sql(generated_sql)
+            results, error_message = self._execute_sql(generated_sql)
         else:
             generated_sql = "INVALID OR DANGEROUS SQL"
+            error_message = "Security restriction: Only SELECT queries are allowed."
 
-        return {
+        response_payload = {
             "question": user_question,
             "generated_sql": generated_sql,
             "data": results
         }
+        
+        if error_message:
+            response_payload["error"] = error_message
+
+        return response_payload
