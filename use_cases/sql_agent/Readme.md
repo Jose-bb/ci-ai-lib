@@ -6,7 +6,7 @@ This use case provides a FastAPI endpoint that acts as an intelligent SQL Agent.
 
 - `src/`: Contains the FastAPI application logic and the `SQLAgent` class.
 - `data/`: Contains the local SQLite database (`tienda_prueba.sqlite`).
-- `test/`: Contains unit tests for the agent.
+- `test/`: Contains unit tests for the agent (using pytest).
 - `utilities/`: Contains scripts to generate or reset the local database.
 - `Dockerfile`: Containerization setup for this microservice.
 
@@ -15,6 +15,8 @@ This use case provides a FastAPI endpoint that acts as an intelligent SQL Agent.
 - **Natural Language to SQL**: Converts user questions into SQL using LLMs.
 - **Autonomous Execution**: Automatically runs the generated query and returns the fetched data.
 - **Schema Awareness**: Dynamically reads the database schema to ensure accurate queries.
+- **Security First**: Built-in shields to prevent destructive queries (only `SELECT` statements are allowed).
+- **Robust Error Handling**: Safely catches database exceptions and returns standard HTTP error codes (e.g., 400 Bad Request) instead of crashing.
 - **FastAPI integration**: Clean and fast API endpoints.
 
 ## API Endpoints
@@ -39,3 +41,10 @@ This use case provides a FastAPI endpoint that acts as an intelligent SQL Agent.
    docker-compose up sql-agent --build
    ```
 4. The API will be available at http://localhost:8001/docs
+
+## Running Tests
+
+To run the automated test suite and verify the integrity of the agent's logic and security shields, run the following command from the root directory:
+    ```bash
+   docker compose run --rm sql-agent pytest use_cases/sql_agent/test/
+   ```
