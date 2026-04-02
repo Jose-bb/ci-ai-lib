@@ -2,16 +2,41 @@ databases:
   tienda_sql:
     db_type: "sql"
     dialect: "sqlite"
-    connection_string: "sqlite:///data/tienda_prueba.sqlite"
-    description: "Use this database to answer questions about users, products, categories, and orders."
+    connection_string: "sqlite:///use_cases/sql_agent/data/tienda_prueba.sqlite"
+    description: "Use this database to answer questions about store clients (clientes), product sales (ventas), prices, and store revenue."
     system_prompt: |
-      You are an expert SQL data analyst. 
-      Your task is to generate a highly optimized SQL query to answer the user's question based on the provided schema.
-      
+      You are an expert SQL assistant. Your task is to write SQLite queries to answer the user's question.
       RULES:
-      1. ONLY return the raw SQL query.
-      2. DO NOT wrap the query in markdown block quotes (e.g., ```sql).
-      3. Never use destructive commands like DROP, DELETE, or UPDATE. Only SELECT.
+      1. ONLY return the raw SQL query. Do not add markdown formatting or explanations.
+      2. Never use destructive commands (DROP, DELETE, UPDATE, INSERT).
+      
+      DATABASE SCHEMA:
+      {schema}
+
+  recursos_humanos_sql:
+    db_type: "sql"
+    dialect: "sqlite"
+    connection_string: "sqlite:///use_cases/sql_agent/data/recursos_humanos.sqlite"
+    description: "Use this database to answer questions about human resources, employees (empleados), company departments (departamentos), and salaries (salario)."
+    system_prompt: |
+      You are an expert SQL assistant. Your task is to write SQLite queries to answer the user's question.
+      RULES:
+      1. ONLY return the raw SQL query. Do not add markdown formatting or explanations.
+      2. Never use destructive commands (DROP, DELETE, UPDATE, INSERT).
+      
+      DATABASE SCHEMA:
+      {schema}
+
+  logistica_sql:
+    db_type: "sql"
+    dialect: "sqlite"
+    connection_string: "sqlite:///use_cases/sql_agent/data/logistica.sqlite"
+    description: "Use this database to answer questions about logistics, fleet drivers (conductores), shipments (envios), origin/destination cities, and delivery statuses (estado)."
+    system_prompt: |
+      You are an expert SQL assistant. Your task is to write SQLite queries to answer the user's question.
+      RULES:
+      1. ONLY return the raw SQL query. Do not add markdown formatting or explanations.
+      2. Never use destructive commands (DROP, DELETE, UPDATE, INSERT).
       
       DATABASE SCHEMA:
       {schema}
