@@ -1,28 +1,30 @@
-# SQL Agent Use Case
+# Multi-Agent SQL Router Use Case (V2)
 
-This use case provides a FastAPI endpoint that acts as an intelligent SQL Agent. It translates natural language questions into valid SQLite queries and executes them against a local database.
+This use case provides a FastAPI endpoint that acts as an intelligent, multi-agent SQL router. Powered by LangGraph, it evaluates natural language questions, routes them to the appropriate database based on a YAML configuration, translates the intent into valid SQLite queries, and safely executes them.
 
 ## Project Structure
 
-- `src/`: Contains the FastAPI application logic and the `SQLAgent` class.
-- `data/`: Contains the local SQLite database (`tienda_prueba.sqlite`).
-- `test/`: Contains unit tests for the agent (using pytest).
-- `utilities/`: Contains scripts to generate or reset the local database.
+- `config/`: Contains `prompts.yaml`, the core configuration driving the LLM rules and database routing logic.
+- `src/`: Contains the FastAPI application (`main.py`), the LangGraph orchestrator (`supervisor.py`), the universal worker (`base_agent.py`), and the secure execution engine (`db_engines.py`).
+- `data/`: Contains the local SQLite databases (`tienda_prueba.sqlite`, `recursos_humanos.sqlite`, `logistica.sqlite`).
+- `test/`: Contains unit tests for the agent suite (using pytest).
+- `utilities/`: Contains Python scripts to generate or reset the local databases.
 - `Dockerfile`: Containerization setup for this microservice.
 
 ## Features
 
-- **Natural Language to SQL**: Converts user questions into SQL using LLMs.
-- **Autonomous Execution**: Automatically runs the generated query and returns the fetched data.
-- **Schema Awareness**: Dynamically reads the database schema to ensure accurate queries.
-- **Security First**: Built-in shields to prevent destructive queries (only `SELECT` statements are allowed).
+- **Dynamic Routing (LangGraph)**: Automatically analyzes the user's intent and routes the query to the correct database (e.g., Store, HR, Logistics).
+- **Configuration-Driven**: Adding a new database requires zero Python code changes; it is entirely managed via `prompts.yaml`.
+- **Natural Language to SQL**: Converts user questions into SQL using AI.
+- **Schema Awareness**: Dynamically reads the database schema to ensure accurate queries and prevent hallucinations.
+- **Security First**: Built-in Python shields prevent destructive queries (only `SELECT` and `WITH` statements are allowed).
 - **Robust Error Handling**: Safely catches database exceptions and returns standard HTTP error codes (e.g., 400 Bad Request) instead of crashing.
 - **FastAPI integration**: Clean and fast API endpoints.
 
 ## API Endpoints
 
 - `GET /health`: Health check.
-- `POST /ask-sql`: Send a natural language question to get SQL and data.
+- `POST /ask-sql`: Send a natural language question to get the routed database, generated SQL, and fetched data.
 
 ### Example Request
 
@@ -35,7 +37,7 @@ This use case provides a FastAPI endpoint that acts as an intelligent SQL Agent.
 ## Running the Use Case
 
 1. Configure your `.env` file in the root directory.
-2. Generate the local database using the script in utilities/ if you haven't already.
+2. Generate the local databases using the scripts in utilities/ if you haven't already.
 3. Run using Docker Compose:
    ```bash
    docker-compose up sql-agent --build
