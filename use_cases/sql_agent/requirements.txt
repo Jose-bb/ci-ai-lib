@@ -11,3 +11,4 @@ langgraph
 pyyaml
 sqlalchemy
 pymongo
+psycopg2-binary==2.9.9
