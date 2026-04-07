@@ -62,4 +62,7 @@ class UniversalDBAgent:
                 self.config.get("database_name")
             )
 
-        return f"--- GENERATED QUERY ---\n{generated_query}\n\n--- EXECUTION RESULT ---\n{execution_result}"
+        return {
+            "query": generated_query,
+            "data": execution_result
+        }

@@ -44,9 +44,10 @@ class DatabaseManager:
                 if result.returns_rows:
                     rows = result.fetchall()
                     if not rows:
-                        return "Query executed successfully, but returned no data."
+                        return []
                     
-                    return json.dumps([dict(row._mapping) for row in rows], default=str)
+                    # Convert non-standard types (such as dates) to strings, but retain the list of dictionaries
+                    return [{k: str(v) if not isinstance(v, (int, float, str, bool, type(None))) else v for k, v in dict(row._mapping).items()} for row in rows]
                 else:
                     return "Error: Query did not return any rows. Ensure you are using a SELECT statement."
                     

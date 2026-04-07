@@ -54,9 +54,12 @@ class SupervisorGraph:
         ]
         
         selected_id = self.llm.invoke(messages=messages, model=self.model_name).strip()
-        
+
+        if selected_id == "UNKNOWN":
+            return {"error": "UNKNOWN_DOMAIN", "selected_db": "UNKNOWN"}
+            
         if selected_id not in self.db_catalog:
-            return {"error": f"Router failed to select a valid DB. It selected: {selected_id}"}
+            return {"error": f"Routing Failure: Invalid DB selected ({selected_id})"}
             
         return {"selected_db": selected_id}
 

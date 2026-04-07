@@ -25,6 +25,7 @@ class QueryResponse(BaseModel):
     """QueryRequest class defines the schema for the outgoing response."""
     question: str
     routed_db: Optional[str] = None
+    query: Optional[str] = None
     data: Any
     error: Optional[str] = None
 
@@ -34,13 +35,17 @@ async def ask_sql(request: QueryRequest):
     try:
         state = supervisor.run(user_question=request.question)
         
+        # Catch routing failures (e.g., when the supervisor yields "UNKNOWN" for out-of-domain queries)
         if state.get("error"):
             raise HTTPException(status_code=400, detail=state["error"])
+
+        agent_result = state.get("result", {})
 
         return {
             "question": state["question"],
             "routed_db": state.get("selected_db"),
-            "data": state.get("result")
+            "query": agent_result.get("query") if isinstance(agent_result, dict) else None,
+            "data": agent_result.get("data") if isinstance(agent_result, dict) else agent_result
         }
     except HTTPException:
         raise

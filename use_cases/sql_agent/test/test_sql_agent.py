@@ -31,8 +31,8 @@ def test_tienda_routing_and_execution():
     assert data["routed_db"] == "tienda_sql"
     assert data["error"] is None
     
-    assert "SELECT" in data["data"].upper()
-    assert "Ana" in data["data"]
+    assert "SELECT" in data["query"].upper()
+    assert "Ana" in str(data["data"])
 
 def test_hr_routing_accuracy():
     """Test 3: Verifies LangGraph correctly routes Human Resources questions."""
