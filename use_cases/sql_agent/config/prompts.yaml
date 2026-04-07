@@ -87,7 +87,7 @@ databases:
   logs_nosql:
     db_type: "nosql"
     dialect: "mongodb"
-    connection_string: "mongodb://localhost:27017/"
+    connection_string: "mongodb://host.docker.internal:27017/"
     database_name: "company_logs"
     description: "Use this database to answer questions about website traffic, server errors, and JSON logs."
     system_prompt: |
