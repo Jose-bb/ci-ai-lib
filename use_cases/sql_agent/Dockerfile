@@ -2,7 +2,7 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-COPY requirements.txt .
+COPY use_cases/sql_agent/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy all repository content

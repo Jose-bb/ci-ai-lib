@@ -1,13 +1,14 @@
 import sqlite3
 import os
 
-db_name = "tienda_prueba.sqlite"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, '../data/tienda_prueba.sqlite')
 
-if os.path.exists(db_name):
-    os.remove(db_name)
+if os.path.exists(DB_PATH):
+    os.remove(DB_PATH)
 
-conexion = sqlite3.connect(db_name)
-cursor = conexion.cursor()
+connection = sqlite3.connect(DB_PATH)
+cursor = connection.cursor()
 
 cursor.execute('''
     CREATE TABLE clientes (
@@ -28,22 +29,22 @@ cursor.execute('''
     )
 ''')
 
-clientes_data = [
+clients_data = [
     ('Ana García', 'Madrid'),
     ('Carlos López', 'Barcelona'),
     ('María Rodríguez', 'Valencia')
 ]
-cursor.executemany('INSERT INTO clientes (nombre, ciudad) VALUES (?, ?)', clientes_data)
+cursor.executemany('INSERT INTO clientes (nombre, ciudad) VALUES (?, ?)', clients_data)
 
-ventas_data = [
+sales_data = [
     (1, 'Ordenador Portátil', 1, 1200.50),
     (1, 'Ratón Inalámbrico', 2, 25.00),
     (2, 'Monitor 27"', 1, 300.00),
     (3, 'Teclado Mecánico', 1, 85.99)
 ]
-cursor.executemany('INSERT INTO ventas (cliente_id, producto, cantidad, precio_unidad) VALUES (?, ?, ?, ?)', ventas_data)
+cursor.executemany('INSERT INTO ventas (cliente_id, producto, cantidad, precio_unidad) VALUES (?, ?, ?, ?)', sales_data)
 
-conexion.commit()
-conexion.close()
+connection.commit()
+connection.close()
 
-print(f"¡Éxito! Base de datos '{db_name}' creada correctamente con datos de prueba.")
+print(f"Success! store Database created correctly at: {DB_PATH}")

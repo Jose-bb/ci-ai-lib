@@ -2,52 +2,51 @@ import os
 import sys
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from typing import List, Optional, Any
+from typing import Optional, Any
 
 # Adding the root to sys.path to allow imports from llm_interfaces
 # Now it's 3 levels up: src -> sql_agent -> use_cases -> root
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..'))
-sys.path.append(ROOT_DIR)
+if ROOT_DIR not in sys.path:
+    sys.path.append(ROOT_DIR)
 
-from use_cases.sql_agent.src.sql_agent import SQLAgent
+from use_cases.sql_agent.src.supervisor import SupervisorGraph
 
-app = FastAPI(title="SQL Agent API", version="1.0.0")
+app = FastAPI(title="Multi-Agent DB API", version="2.0.0")
 
+CONFIG_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../config/prompts.yaml'))
+supervisor = SupervisorGraph(config_path=CONFIG_PATH)
 
-# We initialize the agent once at startup, not on every request.
-# This prevents reading the DB schema repeatedly.
-DB_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../data/tienda_prueba.sqlite'))
-sql_agent = SQLAgent(db_path=DB_PATH)
-
-class SQLQueryRequest(BaseModel):
-    """SQLQueryRequest class defines the schema for the SQL Agent request."""
+class QueryRequest(BaseModel):
+    """QueryRequest class defines the schema for the request."""
     question: str
 
-class SQLQueryResponse(BaseModel):
-    """SQLQueryRequest class defines the schema for the outgoing SQL Agent response."""
+class QueryResponse(BaseModel):
+    """QueryRequest class defines the schema for the outgoing response."""
     question: str
-    generated_sql: str
-    data: List[Any]
+    routed_db: Optional[str] = None
+    query: Optional[str] = None
+    data: Any
     error: Optional[str] = None
 
-@app.post("/ask-sql", response_model=SQLQueryResponse)
-async def ask_sql(request: SQLQueryRequest):
-    """
-    Exposes an endpoint to translate natural language to SQL and execute it.
-
-    Args:
-        request (SQLQueryRequest): The request containing the natural language question.
-
-    Returns:
-        dict: The agent's response including the SQL and fetched data.
-    """
+@app.post("/ask-sql", response_model=QueryResponse)
+async def ask_sql(request: QueryRequest):
+    """Main endpoint. Routes the natural language question through the LangGraph workflow."""
     try:
-        result = sql_agent.process_question(user_question=request.question)
+        state = supervisor.run(user_question=request.question)
         
-        if "error" in result:
-            raise HTTPException(status_code=400, detail=result["error"])
+        # Catch routing failures (e.g., when the supervisor yields "UNKNOWN" for out-of-domain queries)
+        if state.get("error"):
+            raise HTTPException(status_code=400, detail=state["error"])
 
-        return result
+        agent_result = state.get("result", {})
+
+        return {
+            "question": state["question"],
+            "routed_db": state.get("selected_db"),
+            "query": agent_result.get("query") if isinstance(agent_result, dict) else None,
+            "data": agent_result.get("data") if isinstance(agent_result, dict) else agent_result
+        }
     except HTTPException:
         raise
     except Exception as e:
@@ -55,5 +54,5 @@ async def ask_sql(request: SQLQueryRequest):
 
 @app.get("/health")
 async def health():
-    """Health check for the SQL Agent"""
-    return {"status": "ok", "agent": "SQLAgent up and running"}
+    """Health check for the Multi-Agent API."""
+    return {"status": "ok", "agent": "Multi-Agent Supervisor up and running"}
