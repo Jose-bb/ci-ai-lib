@@ -89,6 +89,7 @@ databases:
     dialect: "mongodb"
     connection_string: "mongodb://host.docker.internal:27017/"
     database_name: "company_logs"
+    collection_name: "server_logs"
     description: "Use this database to answer questions about website traffic, server errors, and JSON logs."
     system_prompt: |
       You are an expert MongoDB data analyst.

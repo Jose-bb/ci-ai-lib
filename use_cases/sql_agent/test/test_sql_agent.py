@@ -23,7 +23,7 @@ def test_extract_schema_v2():
 
 def test_tienda_routing_and_execution():
     """Test 2: Verifies full LangGraph flow (Router -> Agent -> DB) for the Store."""
-    response = client.post("/ask-sql", json={"question": "¿Qué clientes viven en Madrid?"})
+    response = client.post("/ask-db", json={"question": "¿Qué clientes viven en Madrid?"})
     
     assert response.status_code == 200
     data = response.json()
@@ -36,7 +36,7 @@ def test_tienda_routing_and_execution():
 
 def test_hr_routing_accuracy():
     """Test 3: Verifies LangGraph correctly routes Human Resources questions."""
-    response = client.post("/ask-sql", json={"question": "¿Cuál es el salario de Elena García?"})
+    response = client.post("/ask-db", json={"question": "¿Cuál es el salario de Elena García?"})
     
     assert response.status_code == 200
     data = response.json()
@@ -46,7 +46,7 @@ def test_hr_routing_accuracy():
 
 def test_router_out_of_domain_handling():
     """Test 4: Verifies the Router rejects questions outside of its configured domains (Anti-Hallucination)."""
-    response = client.post("/ask-sql", json={"question": "¿Cuál es la capital de Australia?"})
+    response = client.post("/ask-db", json={"question": "¿Cuál es la capital de Australia?"})
     
     assert response.status_code == 400
     assert "UNKNOWN" in response.json()["detail"]

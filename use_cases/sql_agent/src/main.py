@@ -29,8 +29,8 @@ class QueryResponse(BaseModel):
     data: Any
     error: Optional[str] = None
 
-@app.post("/ask-sql", response_model=QueryResponse)
-async def ask_sql(request: QueryRequest):
+@app.post("/ask-db", response_model=QueryResponse)
+async def ask_db(request: QueryRequest):
     """Main endpoint. Routes the natural language question through the LangGraph workflow."""
     try:
         state = supervisor.run(user_question=request.question)

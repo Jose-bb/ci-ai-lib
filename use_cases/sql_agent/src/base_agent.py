@@ -29,18 +29,21 @@ class UniversalDBAgent:
                 
             return data["databases"][db_id]
 
-    def process_query(self, user_question: str) -> str:
+    def process_query(self, user_question: str) -> dict:
         """Gets the DB schema, injects the schema into the YAML prompt, asks the LLM to generate the query and executes the query safely using DatabaseManager."""
 
         conn_string = self.config["connection_string"]
         db_type = self.config["db_type"]
+
+        db_name = self.config.get("database_name")
+        collection_name = self.config.get("collection_name")
         
         if db_type == "sql":
             schema = DatabaseManager.get_sql_schema(conn_string)
         elif db_type == "nosql":
-            schema = "NoSQL schema extraction not implemented yet."
+            schema = DatabaseManager.get_nosql_schema(conn_string, db_name, collection_name)
         else:
-            return "Error: Unknown db_type in configuration."
+            return {"error": "Unknown db_type in configuration."}
 
         raw_system_prompt = self.config["system_prompt"]
         formatted_system_prompt = raw_system_prompt.format(schema=schema)
@@ -55,12 +58,7 @@ class UniversalDBAgent:
         if db_type == "sql":
             execution_result = DatabaseManager.execute_sql(generated_query, conn_string)
         else:
-            # Placeholder for future MongoDB execution
-            execution_result = DatabaseManager.execute_nosql(
-                {"query": generated_query}, 
-                conn_string, 
-                self.config.get("database_name")
-            )
+            execution_result = DatabaseManager.execute_nosql(generated_query, conn_string, db_name, collection_name)
 
         return {
             "query": generated_query,

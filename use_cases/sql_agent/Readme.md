@@ -29,7 +29,7 @@ This use case provides a FastAPI endpoint that acts as an intelligent, multi-age
 ## API Endpoints
 
 - `GET /health`: Health check.
-- `POST /ask-sql`: Send a natural language question to get the routed database, generated SQL, and fetched data.
+- `POST /ask-db`: Send a natural language question to get the routed database, generated SQL, and fetched data.
 
 ### Example Request
 

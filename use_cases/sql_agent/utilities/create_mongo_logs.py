@@ -10,7 +10,7 @@ def seed_mongo():
 
     collection.drop()
 
-    endpoints = ["/home", "/api/v1/users", "/api/v1/checkout", "/login", "/ask-sql"]
+    endpoints = ["/home", "/api/v1/users", "/api/v1/checkout", "/login", "/ask-db"]
     methods = ["GET", "POST", "PUT", "DELETE"]
     
     logs = []
