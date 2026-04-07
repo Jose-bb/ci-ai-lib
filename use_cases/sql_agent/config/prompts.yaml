@@ -11,6 +11,7 @@ databases:
       BUSINESS RULES FOR STORE:
       - If the user asks for "revenue" (ingresos) or "total sales", use the sum of the relevant amount columns.
       - Default to ordering results by highest amount unless specified otherwise.
+      - MAPPING/SYNONYMS: If the user asks for "productos" (products), look at the 'producto' column in the 'ventas' table. If they ask for "precio" (price), map it to the 'precio_unidad' column in the 'ventas' table.
       
       CORE DIRECTIVES:
       1. EXACT MAPPING: Do not invent columns. If a requested metric does not exist, return EXACTLY: SELECT 'Error: Out of schema' AS message;
