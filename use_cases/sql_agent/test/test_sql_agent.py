@@ -61,3 +61,30 @@ def test_security_restriction_blocks_non_select():
     assert isinstance(result, str)
     error_message = result.lower()
     assert "select" in error_message or "error" in error_message or "with" in error_message
+
+def test_extract_nosql_schema():
+    """Test 6: Verifies that DatabaseManager correctly extracts a sample document from MongoDB."""
+    conn_string = "mongodb://host.docker.internal:27017/"
+    db_name = "company_logs"
+    collection_name = "server_logs"
+    
+    schema = DatabaseManager.get_nosql_schema(conn_string, db_name, collection_name)
+    
+    assert schema is not None
+    assert "Collection: server_logs" in schema
+    assert "Sample Document Structure" in schema
+
+def test_nosql_routing_and_execution():
+    """Test 7: Verifies LangGraph correctly routes NoSQL questions and returns a valid Mongo dictionary."""
+    response = client.post("/ask-db", json={"question": "Muestra los logs que hayan dado un error de tipo CRITICAL"})
+    
+    assert response.status_code == 200
+    data = response.json()
+    
+    assert data["routed_db"] == "logs_nosql"
+    assert data["error"] is None
+    
+    assert "{" in data["query"] and "}" in data["query"]
+    assert "CRITICAL" in data["query"]
+    
+    assert isinstance(data["data"], list)
