@@ -3,6 +3,10 @@ import yaml
 from typing import TypedDict, Optional
 from langgraph.graph import StateGraph, START, END
 
+from presidio_analyzer import AnalyzerEngine
+from presidio_anonymizer import AnonymizerEngine
+from presidio_analyzer.nlp_engine import NlpEngineProvider
+
 from llm_interfaces.factory import LLMFactory
 from use_cases.sql_agent.src.base_agent import UniversalDBAgent
 
@@ -13,7 +17,7 @@ class GraphState(TypedDict):
     error: Optional[str]
 
 class SupervisorGraph:
-    """Acts as the brain that routes user questions to the correct database configuration."""
+    """Acts as the brain that routes user questions to the correct database configuration and ensures data privacy."""
     
     def __init__(self, config_path: str = "config/prompts.yaml", provider: str = "azure_openai"):
         self.config_path = config_path
@@ -21,6 +25,17 @@ class SupervisorGraph:
         self.model_name = os.getenv("AZURE_OPENAI_MODEL")
         
         self.db_catalog = self._load_catalog()
+
+        nlp_configuration = {
+            "nlp_engine_name": "spacy",
+            "models": [{"lang_code": "es", "model_name": "es_core_news_md"}]
+        }
+        nlp_provider = NlpEngineProvider(nlp_configuration=nlp_configuration)
+        nlp_engine = nlp_provider.create_engine()
+        
+        self.analyzer = AnalyzerEngine(nlp_engine=nlp_engine, supported_languages=["es"])
+        self.anonymizer = AnonymizerEngine()
+        
         self.graph = self._build_graph()
 
     def _load_catalog(self) -> dict:
@@ -78,16 +93,43 @@ class SupervisorGraph:
         except Exception as e:
             return {"error": str(e)}
 
+    def _anonymize_recursive(self, data):
+        """Helper function to recursively traverse lists and dictionaries to mask strings."""
+        if isinstance(data, str):
+            results = self.analyzer.analyze(text=data, language='es')
+            anonymized = self.anonymizer.anonymize(text=data, analyzer_results=results)
+            return anonymized.text
+        elif isinstance(data, dict):
+            return {key: self._anonymize_recursive(value) for key, value in data.items()}
+        elif isinstance(data, list):
+            return [self._anonymize_recursive(item) for item in data]
+        else:
+            return data
+
+    def anonymizer_node(self, state: GraphState) -> dict:
+        """Intercepts the execution result and masks PII before returning."""
+        if state.get("error") or not state.get("result"):
+            return {}
+
+        agent_result = state["result"]
+        raw_data = agent_result.get("data", [])
+
+        agent_result["data"] = self._anonymize_recursive(raw_data)
+
+        return {"result": agent_result}
+
     def _build_graph(self):
-        """Maps out the flow: START -> Router -> Executor -> END."""
+        """Maps out the flow: START -> Router -> Executor -> Anonymizer -> END."""
         builder = StateGraph(GraphState)
         
         builder.add_node("router", self.router_node)
         builder.add_node("executor", self.execution_node)
+        builder.add_node("anonymizer", self.anonymizer_node)
         
         builder.add_edge(START, "router")
         builder.add_edge("router", "executor")
-        builder.add_edge("executor", END)
+        builder.add_edge("executor", "anonymizer")
+        builder.add_edge("anonymizer", END)
         
         return builder.compile()
 
