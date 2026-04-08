@@ -1,6 +1,8 @@
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.exc import SQLAlchemyError
 import json
+from pymongo import MongoClient
+from typing import Any
 
 class DatabaseManager:
     """
@@ -57,9 +59,57 @@ class DatabaseManager:
             return f"Unexpected Error: {str(e)}"
 
     @staticmethod
-    def execute_nosql(query_dict: dict, connection_string: str, db_name: str) -> str:
-        """
-        [Future implementation placeholder]
-        PyMongo execution logic will be implemented here for NoSQL databases.
-        """
-        return "NoSQL execution is not implemented yet in V2 Phase 1."
+    def get_nosql_schema(connection_string: str, db_name: str, collection_name: str) -> str:
+        """Infers the NoSQL schema by extracting a sample document."""
+        try:
+            client = MongoClient(connection_string)
+            db = client[db_name]
+            collection = db[collection_name]
+            
+            sample_doc = collection.find_one()
+            if not sample_doc:
+                return "No data available to infer schema."
+            
+            sample_doc.pop("_id", None)
+            
+            schema_info = [
+                f"Collection: {collection_name}",
+                "Sample Document Structure (JSON):",
+                json.dumps(sample_doc, indent=2, default=str)
+            ]
+            
+            return "\n".join(schema_info)
+        except Exception as e:
+            return f"Error reading NoSQL schema: {str(e)}"
+
+    @staticmethod
+    def execute_nosql(query_payload: str, connection_string: str, db_name: str, collection_name: str) -> Any:
+        """Executes a JSON payload query against MongoDB."""
+        try:
+            client = MongoClient(connection_string)
+            db = client[db_name]
+            collection = db[collection_name]
+            
+            clean_payload = query_payload.strip()
+            if clean_payload.startswith("```json"):
+                clean_payload = clean_payload[7:-3].strip()
+            elif clean_payload.startswith("```"):
+                clean_payload = clean_payload[3:-3].strip()
+            
+            query_dict = json.loads(clean_payload)
+            
+            cursor = collection.find(query_dict).limit(50)
+            results = list(cursor)
+            
+            if not results:
+                return []
+                
+            for doc in results:
+                doc["_id"] = str(doc["_id"])
+                
+            return [{k: str(v) if not isinstance(v, (int, float, str, bool, type(None), list, dict)) else v for k, v in doc.items()} for doc in results]
+            
+        except json.JSONDecodeError:
+            return {"error": "El LLM no devolvió un JSON/Diccionario válido.", "raw_output": query_payload}
+        except Exception as e:
+            return f"Database Error: {str(e)}"

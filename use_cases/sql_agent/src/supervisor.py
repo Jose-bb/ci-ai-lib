@@ -9,7 +9,7 @@ from use_cases.sql_agent.src.base_agent import UniversalDBAgent
 class GraphState(TypedDict):
     question: str
     selected_db: Optional[str]
-    result: Optional[str]
+    result: Optional[dict]
     error: Optional[str]
 
 class SupervisorGraph:

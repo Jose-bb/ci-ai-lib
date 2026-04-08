@@ -1,35 +1,35 @@
-# Multi-Agent SQL Router Use Case (V2)
+# Multi-Agent Hybrid DB Router Use Case (V3)
 
-This use case provides a FastAPI endpoint that acts as an intelligent, multi-agent database router. Powered by LangGraph and SQLAlchemy, it evaluates natural language questions, routes them to the appropriate database based on a YAML configuration, translates the intent into valid queries (supporting both SQLite and PostgreSQL), and safely executes them.
+This use case provides a FastAPI endpoint that acts as an intelligent, multi-agent hybrid database router. Powered by LangGraph, SQLAlchemy, and PyMongo, it evaluates natural language questions, routes them to the appropriate database based on a YAML configuration, translates the intent into valid queries (supporting SQLite, PostgreSQL, and MongoDB), and safely executes them.
 
 ## Project Structure
 
-- `config/`: Contains `prompts.yaml`, the core configuration driving the LLM rules and database routing logic.
+- `config/`: Contains `prompts.yaml`, the core configuration driving the LLM rules and database routing logic for both SQL and NoSQL targets.
 - `src/`: 
   - `main.py`: FastAPI application entry point.
-  - `supervisor.py`: LangGraph orchestrator that routes user intent.
-  - `base_agent.py`: Universal worker that generates the SQL based on dynamic schemas.
-  - `db_engines.py`: Secure execution engine powered by SQLAlchemy.
+  - `supervisor.py`: LangGraph orchestrator that routes user intent to the correct semantic domain.
+  - `base_agent.py`: Universal worker that extracts schemas and requests the exact query structure needed (SQL string or JSON dictionary).
+  - `db_engines.py`: Secure execution engine capable of handling tabular data (SQLAlchemy) and nested document data (PyMongo).
 - `data/`: Contains the local SQLite databases (`tienda_prueba.sqlite`, `recursos_humanos.sqlite`, `logistica.sqlite`).
 - `test/`: Contains unit tests for the agent suite (using pytest).
-- `utilities/`: Python scripts to generate and populate both local and remote databases.
+- `utilities/`: Python scripts to generate and populate databases, including relational DBs and NoSQL collections (e.g., `create_mongo_logs.py`).
 - `Dockerfile`: Containerization setup for this microservice.
-- `docker-compose.db.yaml`: Isolated infrastructure configuration for the PostgreSQL server.
+- `docker-compose.db.yaml`: Isolated infrastructure configuration for PostgreSQL and MongoDB servers.
 
 ## Features
 
 - **Dynamic Routing (LangGraph)**: Automatically analyzes the user's intent and routes the query to the correct DB (e.g., Store, HR, Logistics).
 - **Configuration-Driven**: Adding a new database requires zero Python code changes; it is entirely managed via `prompts.yaml`.
-- **Natural Language to SQL**: Converts user questions into SQL using AI.
-- **Schema Awareness**: Dynamically reads the database schema to ensure accurate queries and prevent hallucinations.
-- **Security First**: Built-in Python shields prevent destructive queries (only `SELECT` and `WITH` statements are allowed).
+- **Multi-Paradigm Generation**: Converts user questions into raw SQL strings or PyMongo filter dictionaries (JSON) using AI.
+- **Dynamic Schema Awareness**: Dynamically reads database schemas (using inspectors for SQL and document sampling for NoSQL) to ensure accurate queries and prevent AI hallucinations.
+- **Security First**: Built-in Python shields prevent destructive queries. SQL execution blocks everything except `SELECT` and `WITH`, while NoSQL limits query sizes and prevents data mutation.
 - **Robust Error Handling**: Safely catches DB exceptions and routing failures, returning standard HTTP error codes (e.g., 400 Bad Request).
 - **FastAPI integration**: Clean and fast API endpoints.
 
 ## API Endpoints
 
 - `GET /health`: Health check.
-- `POST /ask-sql`: Send a natural language question to get the routed database, generated SQL, and fetched data.
+- `POST /ask-db`: Send a natural language question to get the routed database, generated query/filter, and fetched data.
 
 ### Example Request
 
@@ -42,7 +42,7 @@ This use case provides a FastAPI endpoint that acts as an intelligent, multi-age
 ## Running the Use Case
 
 1. Configure your `.env` file in the root directory.
-2. Spin up the isolated PostgreSQL infrastructure:
+2. Spin up the isolated database infrastructure (PostgreSQL & MongoDB):
   ```bash
   docker compose -f use_cases/sql_agent/docker-compose.db.yaml up -d
   ```
