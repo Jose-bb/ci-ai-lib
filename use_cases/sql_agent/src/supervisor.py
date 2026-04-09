@@ -1,7 +1,10 @@
 import os
 import yaml
-from typing import TypedDict, Optional
+import redis
+import operator
+from typing import TypedDict, Optional, Annotated
 from langgraph.graph import StateGraph, START, END
+from langgraph.checkpoint.redis import RedisSaver
 
 from presidio_analyzer import AnalyzerEngine
 from presidio_anonymizer import AnonymizerEngine
@@ -15,6 +18,7 @@ class GraphState(TypedDict):
     selected_db: Optional[str]
     result: Optional[dict]
     error: Optional[str]
+    history: Annotated[list[str], operator.add]
 
 class SupervisorGraph:
     """Acts as the brain that routes user questions to the correct database configuration and ensures data privacy."""
@@ -35,6 +39,12 @@ class SupervisorGraph:
         
         self.analyzer = AnalyzerEngine(nlp_engine=nlp_engine, supported_languages=["es"])
         self.anonymizer = AnonymizerEngine()
+
+        redis_host = os.getenv("REDIS_HOST", "host.docker.internal")
+        redis_url = f"redis://{redis_host}:6379/0"
+        self.memory = RedisSaver(redis_url)
+
+        self.memory.setup()
         
         self.graph = self._build_graph()
 
@@ -47,6 +57,8 @@ class SupervisorGraph:
     def router_node(self, state: GraphState) -> dict:
         """Reads the YAML descriptions and asks the LLM to decide which database is the best fit for the user's question."""
         question = state["question"]
+
+        history_text = "\n".join(state.get("history", []))
         
         catalog_text = ""
         for db_id, db_info in self.db_catalog.items():
@@ -55,12 +67,15 @@ class SupervisorGraph:
         system_prompt = (
             "You are an expert database routing supervisor. "
             "Your task is to analyze the user's question and route it to the correct database.\n\n"
+            "CONVERSATION HISTORY:\n"
+            f"{history_text}\n\n"
             "AVAILABLE DATABASES:\n"
             f"{catalog_text}\n"
             "RULES:\n"
             "1. Respond ONLY with the exact ID of the database.\n"
             "2. Do not add any extra text, punctuation, or explanations.\n"
-            "3. If no database matches, respond with 'UNKNOWN'."
+            "3. If the user's question is a continuation (e.g., 'and in Madrid?'), use the CONVERSATION HISTORY to understand the context.\n"
+            "4. If no database matches, respond with 'UNKNOWN'."
         )
         
         messages = [
@@ -76,7 +91,10 @@ class SupervisorGraph:
         if selected_id not in self.db_catalog:
             return {"error": f"Routing Failure: Invalid DB selected ({selected_id})"}
             
-        return {"selected_db": selected_id}
+        return {
+            "selected_db": selected_id, 
+            "history": [f"User asked: {question}", f"Router selected DB: {selected_id}"]
+        }
 
     def execution_node(self, state: GraphState) -> dict:
         """Instantiates the Universal Agent using the selected DB ID and executes the query."""
@@ -85,10 +103,16 @@ class SupervisorGraph:
             
         selected_db = state["selected_db"]
         question = state["question"]
+
+        history_text = "\n".join(state.get("history", []))
+        enriched_question = (
+            f"HISTORIAL DE CONVERSACIÓN:\n{history_text}\n\n"
+            f"PREGUNTA DEL USUARIO A RESOLVER:\n{question}"
+        )
         
         try:
             agent = UniversalDBAgent(db_id=selected_db, config_path=self.config_path)
-            result = agent.process_query(question)
+            result = agent.process_query(enriched_question)
             return {"result": result}
         except Exception as e:
             return {"error": str(e)}
@@ -150,15 +174,16 @@ class SupervisorGraph:
         builder.add_edge("executor", "anonymizer")
         builder.add_edge("anonymizer", END)
         
-        return builder.compile()
+        return builder.compile(checkpointer=self.memory)
 
-    def run(self, user_question: str) -> dict:
+    def run(self, user_question: str, session_id: str = "default_session") -> dict:
         """Public entry point to throw a question into the graph."""
-        initial_state = GraphState(
-            question=user_question,
-            selected_db=None,
-            result=None,
-            error=None
-        )
+        config = {"configurable": {"thread_id": session_id}}
+
+        inputs = {
+            "question": user_question,
+            "error": None,
+            "result": None
+        }
         
-        return self.graph.invoke(initial_state)
+        return self.graph.invoke(inputs, config=config)
