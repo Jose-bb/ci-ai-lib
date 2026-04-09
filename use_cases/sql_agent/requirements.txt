@@ -12,3 +12,6 @@ pyyaml
 sqlalchemy
 pymongo
 psycopg2-binary==2.9.9
+presidio-analyzer
+presidio-anonymizer
+spacy

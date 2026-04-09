@@ -5,6 +5,9 @@ WORKDIR /app
 COPY use_cases/sql_agent/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Download the Spanish NLP model for Presidio
+RUN python -m spacy download es_core_news_md
+
 # Copy all repository content
 COPY . .
 

@@ -1,6 +1,7 @@
 import os
 import pytest
 import sys
+import re
 from fastapi.testclient import TestClient
 
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..'))
@@ -88,3 +89,17 @@ def test_nosql_routing_and_execution():
     assert "CRITICAL" in data["query"]
     
     assert isinstance(data["data"], list)
+
+def test_pii_anonymization_active():
+    """Test 8: Verifies that the Presidio anonymizer node masks sensitive data (PII) recursively."""
+    response = client.post("/ask-db", json={"question": "Muestra los logs que hayan dado un error de tipo CRITICAL."})
+    
+    assert response.status_code == 200
+    data = response.json()
+    
+    data_str = str(data["data"])
+    
+    assert "<IP_ADDRESS>" in data_str or "<DATE_TIME>" in data_str
+
+    ip_pattern = re.compile(r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b')
+    assert not ip_pattern.search(data_str), "¡Fuga de datos! Se encontró una IP sin censurar en la respuesta."

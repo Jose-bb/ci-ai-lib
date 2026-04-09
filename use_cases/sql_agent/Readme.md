@@ -1,6 +1,6 @@
-# Multi-Agent Hybrid DB Router Use Case (V3)
+# Multi-Agent Hybrid DB Router with PII Privacy (V4)
 
-This use case provides a FastAPI endpoint that acts as an intelligent, multi-agent hybrid database router. Powered by LangGraph, SQLAlchemy, and PyMongo, it evaluates natural language questions, routes them to the appropriate database based on a YAML configuration, translates the intent into valid queries (supporting SQLite, PostgreSQL, and MongoDB), and safely executes them.
+This use case provides a FastAPI endpoint that acts as an intelligent, multi-agent hybrid database router. Powered by LangGraph, SQLAlchemy, PyMongo, and Microsoft Presidio, it evaluates natural language questions, routes them to the appropriate database based on a YAML configuration, translates the intent into valid queries (supporting SQLite, PostgreSQL, and MongoDB), safely executes them, and recursively anonymizes sensitive data before returning the payload.
 
 ## Project Structure
 
@@ -22,20 +22,21 @@ This use case provides a FastAPI endpoint that acts as an intelligent, multi-age
 - **Configuration-Driven**: Adding a new database requires zero Python code changes; it is entirely managed via `prompts.yaml`.
 - **Multi-Paradigm Generation**: Converts user questions into raw SQL strings or PyMongo filter dictionaries (JSON) using AI.
 - **Dynamic Schema Awareness**: Dynamically reads database schemas (using inspectors for SQL and document sampling for NoSQL) to ensure accurate queries and prevent AI hallucinations.
+- **Deterministic Key Masking:** Instantly redacts highly sensitive keys (`password`, `token`, `api_key`) before they even reach the AI.
+- **Probabilistic NLP Masking:** Integrates Microsoft Presidio and spaCy NLP to recursively scan and anonymize sensitive Personal Identifiable Information (like IPs, Credit Cards, and National IDs) hiding in free text across any depth of nested SQL or NoSQL results (GDPR ready).
 - **Security First**: Built-in Python shields prevent destructive queries. SQL execution blocks everything except `SELECT` and `WITH`, while NoSQL limits query sizes and prevents data mutation.
-- **Robust Error Handling**: Safely catches DB exceptions and routing failures, returning standard HTTP error codes (e.g., 400 Bad Request).
 - **FastAPI integration**: Clean and fast API endpoints.
 
 ## API Endpoints
 
 - `GET /health`: Health check.
-- `POST /ask-db`: Send a natural language question to get the routed database, generated query/filter, and fetched data.
+- `POST /ask-db`: Send a natural language question to get the routed database, generated query/filter, and the scrubbed, privacy-safe data.
 
 ### Example Request
 
 ```json
 {
-  "question": "What is the budget for the Black Friday campaign and where do its leads come from?"
+  "question": "Show me the logs that threw a CRITICAL error."
 }
 ```
 
