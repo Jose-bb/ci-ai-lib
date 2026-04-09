@@ -93,14 +93,33 @@ class SupervisorGraph:
         except Exception as e:
             return {"error": str(e)}
 
-    def _anonymize_recursive(self, data):
-        """Helper function to recursively traverse lists and dictionaries to mask strings."""
+    def _anonymize_recursive(self, data, current_key=None):
+        """Helper function to recursively traverse lists and dictionaries to mask specific strings and sensitive keys."""
+
+        DANGEROUS_KEYS = ["password", "pass", "pwd", "token", "secret", "api_key", "hash"]
+        
+        if current_key and any(keyword in str(current_key).lower() for keyword in DANGEROUS_KEYS):
+            return "<REDACTED_SECRET>"
+        
+        DANGEROUS_ENTITIES = [
+            "IP_ADDRESS",
+            "CREDIT_CARD",
+            "IBAN_CODE",
+            "ES_NIF",
+            "ES_NIE"
+        ]
+
         if isinstance(data, str):
-            results = self.analyzer.analyze(text=data, language='es')
+            results = self.analyzer.analyze(
+                text=data, 
+                language='es',
+                entities=DANGEROUS_ENTITIES
+            )
             anonymized = self.anonymizer.anonymize(text=data, analyzer_results=results)
             return anonymized.text
+            
         elif isinstance(data, dict):
-            return {key: self._anonymize_recursive(value) for key, value in data.items()}
+            return {key: self._anonymize_recursive(value, current_key=key) for key, value in data.items()}
         elif isinstance(data, list):
             return [self._anonymize_recursive(item) for item in data]
         else:
