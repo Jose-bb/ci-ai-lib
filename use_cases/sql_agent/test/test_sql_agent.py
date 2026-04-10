@@ -24,7 +24,10 @@ def test_extract_schema_v2():
 
 def test_tienda_routing_and_execution():
     """Test 2: Verifies full LangGraph flow (Router -> Agent -> DB) for the Store."""
-    response = client.post("/ask-db", json={"question": "¿Qué clientes viven en Madrid?"})
+    response = client.post("/ask-db", json={
+        "question": "¿Qué clientes viven en Madrid?",
+        "session_id": "test_tienda_1"
+    })
     
     assert response.status_code == 200
     data = response.json()
@@ -37,7 +40,10 @@ def test_tienda_routing_and_execution():
 
 def test_hr_routing_accuracy():
     """Test 3: Verifies LangGraph correctly routes Human Resources questions."""
-    response = client.post("/ask-db", json={"question": "¿Cuál es el salario de Elena García?"})
+    response = client.post("/ask-db", json={
+        "question": "¿Cuál es el salario de Elena García?",
+        "session_id": "test_hr_1"
+    })
     
     assert response.status_code == 200
     data = response.json()
@@ -46,8 +52,11 @@ def test_hr_routing_accuracy():
     assert data["error"] is None
 
 def test_router_out_of_domain_handling():
-    """Test 4: Verifies the Router rejects questions outside of its configured domains (Anti-Hallucination)."""
-    response = client.post("/ask-db", json={"question": "¿Cuál es la capital de Australia?"})
+    """Test 4: Verifies the Router rejects questions outside of its configured domains."""
+    response = client.post("/ask-db", json={
+        "question": "¿Cuál es la capital de Australia?",
+        "session_id": "test_domain_1"
+    })
     
     assert response.status_code == 400
     assert "UNKNOWN" in response.json()["detail"]
@@ -65,7 +74,7 @@ def test_security_restriction_blocks_non_select():
 
 def test_extract_nosql_schema():
     """Test 6: Verifies that DatabaseManager correctly extracts a sample document from MongoDB."""
-    conn_string = "mongodb://host.docker.internal:27017/"
+    conn_string = os.getenv("MONGODB_URI", "mongodb://host.docker.internal:27017/")
     db_name = "company_logs"
     collection_name = "server_logs"
     
@@ -77,7 +86,10 @@ def test_extract_nosql_schema():
 
 def test_nosql_routing_and_execution():
     """Test 7: Verifies LangGraph correctly routes NoSQL questions and returns a valid Mongo dictionary."""
-    response = client.post("/ask-db", json={"question": "Muestra los logs que hayan dado un error de tipo CRITICAL"})
+    response = client.post("/ask-db", json={
+        "question": "Muestra los logs que hayan dado un error de tipo CRITICAL",
+        "session_id": "test_nosql_1"
+    })
     
     assert response.status_code == 200
     data = response.json()
@@ -87,19 +99,39 @@ def test_nosql_routing_and_execution():
     
     assert "{" in data["query"] and "}" in data["query"]
     assert "CRITICAL" in data["query"]
-    
     assert isinstance(data["data"], list)
 
 def test_pii_anonymization_active():
-    """Test 8: Verifies that the Presidio anonymizer node masks sensitive data (PII) recursively."""
-    response = client.post("/ask-db", json={"question": "Muestra los logs que hayan dado un error de tipo CRITICAL."})
+    """Test 8: Verifies that the dual-layer privacy firewall masks PII and secrets recursively."""
+    response = client.post("/ask-db", json={
+        "question": "Dame todos los detalles del log de nivel CRITICAL, quiero ver el api_token y la ip_address.",
+        "session_id": "test_pii_1"
+    })
+    
+    assert response.status_code == 200
+    data_str = str(response.json()["data"])
+    
+    assert "<IP_ADDRESS>" in data_str
+    ip_pattern = re.compile(r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b')
+    assert not ip_pattern.search(data_str), "¡Fuga de datos! Se encontró una IP sin censurar."
+
+def test_conversational_memory_active():
+    """Test 9: Verifies that Redis Stack maintains cross-turn context for ambiguous questions."""
+    session_id = "test_memory_1"
+
+    client.post("/ask-db", json={
+        "question": "¿Qué clientes viven en Madrid?",
+        "session_id": session_id
+    })
+
+    response = client.post("/ask-db", json={
+        "question": "¿Y en Barcelona?",
+        "session_id": session_id
+    })
     
     assert response.status_code == 200
     data = response.json()
-    
-    data_str = str(data["data"])
-    
-    assert "<IP_ADDRESS>" in data_str or "<DATE_TIME>" in data_str
 
-    ip_pattern = re.compile(r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b')
-    assert not ip_pattern.search(data_str), "¡Fuga de datos! Se encontró una IP sin censurar en la respuesta."
+    assert data["routed_db"] == "tienda_sql"
+    assert "SELECT" in data["query"].upper()
+    assert "Carlos" in str(data["data"])

@@ -3,7 +3,8 @@ from datetime import datetime, timedelta
 import random
 
 def seed_mongo():
-    client = MongoClient("mongodb://host.docker.internal:27017/")
+    mongo_uri = os.getenv("MONGODB_URI", "mongodb://localhost:27017/")
+    client = MongoClient(mongo_uri)
     
     db = client["company_logs"]
     collection = db["server_logs"]

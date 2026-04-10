@@ -12,7 +12,7 @@ if ROOT_DIR not in sys.path:
 
 from use_cases.sql_agent.src.supervisor import SupervisorGraph
 
-app = FastAPI(title="Multi-Agent DB API", version="2.0.0")
+app = FastAPI(title="Multi-Agent DB API", version="5.0.0")
 
 CONFIG_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../config/prompts.yaml'))
 supervisor = SupervisorGraph(config_path=CONFIG_PATH)
@@ -20,6 +20,7 @@ supervisor = SupervisorGraph(config_path=CONFIG_PATH)
 class QueryRequest(BaseModel):
     """QueryRequest class defines the schema for the request."""
     question: str
+    session_id: str = "default_session"
 
 class QueryResponse(BaseModel):
     """QueryRequest class defines the schema for the outgoing response."""
@@ -33,7 +34,7 @@ class QueryResponse(BaseModel):
 async def ask_db(request: QueryRequest):
     """Main endpoint. Routes the natural language question through the LangGraph workflow."""
     try:
-        state = supervisor.run(user_question=request.question)
+        state = supervisor.run(user_question=request.question, session_id=request.session_id)
         
         # Catch routing failures (e.g., when the supervisor yields "UNKNOWN" for out-of-domain queries)
         if state.get("error"):

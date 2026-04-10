@@ -20,8 +20,10 @@ class Lead(Base):
     origen = Column(String)
     campana_id = Column(Integer, ForeignKey('campanas.id'))
 
-# The magical connection string. We use host.docker.internal to reach the mapped port from inside the agent's container.
-DATABASE_URI = 'postgresql+psycopg2://admin:admin@host.docker.internal:5432/crm_db'
+DATABASE_URI = os.getenv(
+    "POSTGRES_CRM_URI", 
+    "postgresql+psycopg2://admin:admin@host.docker.internal:5432/crm_db"
+)
 
 def init_db():
     print(f"Conectando a {DATABASE_URI}...")
