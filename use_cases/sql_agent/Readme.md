@@ -1,6 +1,6 @@
-# Multi-Agent Hybrid DB Router with PII Privacy (V4)
+# Multi-Agent Hybrid DB Router with PII Privacy & Redis Memory (V5)
 
-This use case provides a FastAPI endpoint that acts as an intelligent, multi-agent hybrid database router. Powered by LangGraph, SQLAlchemy, PyMongo, and Microsoft Presidio, it evaluates natural language questions, routes them to the appropriate database based on a YAML configuration, translates the intent into valid queries (supporting SQLite, PostgreSQL, and MongoDB), safely executes them, and recursively anonymizes sensitive data before returning the payload.
+This use case provides a FastAPI endpoint that acts as an intelligent, multi-agent hybrid database router. Powered by LangGraph, SQLAlchemy, PyMongo, Microsoft Presidio, and Redis Stack, it evaluates natural language questions, routes them to the appropriate database based on a YAML configuration, translates the intent into valid queries, safely executes them, recursively anonymizes sensitive data, and maintains persistent conversational memory for multi-turn context.
 
 ## Project Structure
 
@@ -14,7 +14,7 @@ This use case provides a FastAPI endpoint that acts as an intelligent, multi-age
 - `test/`: Contains unit tests for the agent suite (using pytest).
 - `utilities/`: Python scripts to generate and populate databases, including relational DBs and NoSQL collections (e.g., `create_mongo_logs.py`).
 - `Dockerfile`: Containerization setup for this microservice.
-- `docker-compose.db.yaml`: Isolated infrastructure configuration for PostgreSQL and MongoDB servers.
+- `docker-compose.db.yaml`: Isolated infrastructure configuration for PostgreSQL, MongoDB, and Redis Stack servers.
 
 ## Features
 
@@ -22,6 +22,8 @@ This use case provides a FastAPI endpoint that acts as an intelligent, multi-age
 - **Configuration-Driven**: Adding a new database requires zero Python code changes; it is entirely managed via `prompts.yaml`.
 - **Multi-Paradigm Generation**: Converts user questions into raw SQL strings or PyMongo filter dictionaries (JSON) using AI.
 - **Dynamic Schema Awareness**: Dynamically reads database schemas (using inspectors for SQL and document sampling for NoSQL) to ensure accurate queries and prevent AI hallucinations.
+- **Session Isolation**: Supports multi-tenant conversations using `session_id`, allowing the backend to handle thousands of independent user sessions simultaneously without data bleed.
+- **Context-Aware Reasoning**: The LangGraph supervisor leverages historical state to seamlessly resolve ambiguous follow-up questions (e.g., "What was the name of the previous client?").
 - **Deterministic Key Masking:** Instantly redacts highly sensitive keys (`password`, `token`, `api_key`) before they even reach the AI.
 - **Probabilistic NLP Masking:** Integrates Microsoft Presidio and spaCy NLP to recursively scan and anonymize sensitive Personal Identifiable Information (like IPs, Credit Cards, and National IDs) hiding in free text across any depth of nested SQL or NoSQL results (GDPR ready).
 - **Security First**: Built-in Python shields prevent destructive queries. SQL execution blocks everything except `SELECT` and `WITH`, while NoSQL limits query sizes and prevents data mutation.
@@ -36,21 +38,22 @@ This use case provides a FastAPI endpoint that acts as an intelligent, multi-age
 
 ```json
 {
-  "question": "Show me the logs that threw a CRITICAL error."
+  "question": "Show me the logs that threw a CRITICAL error.",
+  "session_id": "user_session_123"
 }
 ```
 
 ## Running the Use Case
 
 1. Configure your `.env` file in the root directory.
-2. Spin up the isolated database infrastructure (PostgreSQL & MongoDB):
+2. Spin up the isolated database infrastructure (PostgreSQL, MongoDB & Redis Stack):
   ```bash
   docker compose -f use_cases/sql_agent/docker-compose.db.yaml up -d
   ```
 3. Generate the local databases using the scripts in utilities/ if you haven't already.
 4. Run using Docker Compose:
    ```bash
-   docker-compose up sql-agent --build
+   docker-compose up --build -d sql-agent
    ```
 5. The API will be available at http://localhost:8001/docs
 
