@@ -9,13 +9,13 @@ services:
 
   redis_memory:
     image: redis/redis-stack-server:latest
-    container_name: agent-redis-memory
+    container_name: vector-redis-memory
     restart: always
     ports:
-      - "6379:6379"
+      - "6380:6379"
     volumes:
-      - redis_data:/data
+      - vector_redis_data:/data
 
 volumes:
   chroma_data:
-  redis_data:
+  vector_redis_data:

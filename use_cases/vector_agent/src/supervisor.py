@@ -41,7 +41,7 @@ class SupervisorGraph:
         self.anonymizer = AnonymizerEngine()
 
         redis_host = os.getenv("REDIS_HOST", "host.docker.internal")
-        redis_url = f"redis://{redis_host}:6379/0"
+        redis_url = f"redis://{redis_host}:6380/0"
         self.memory = RedisSaver(redis_url)
 
         self.memory.setup()
