@@ -1,0 +1,32 @@
+# --- Base & API ---
+fastapi
+uvicorn
+pydantic
+python-dotenv
+pyyaml
+
+# --- LLM & Orchestration ---
+openai
+google-genai
+langgraph
+langchain
+langchain-openai
+langchain-community
+
+# --- Vector Database & RAG ---
+chromadb
+langchain-chroma
+pypdf
+tiktoken
+
+# --- Privacy & Memory ---
+presidio-analyzer
+presidio-anonymizer
+spacy
+redis
+langgraph-checkpoint-redis
+
+# --- Testing ---
+pytest
+httpx
+pytest-asyncio
