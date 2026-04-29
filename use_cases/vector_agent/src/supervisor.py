@@ -119,7 +119,6 @@ class SupervisorGraph:
 
     def _anonymize_recursive(self, data, current_key=None):
         """Helper function to recursively traverse lists and dictionaries to mask specific strings and sensitive keys."""
-
         DANGEROUS_KEYS = ["password", "pass", "pwd", "token", "secret", "api_key", "hash"]
         
         if current_key and any(keyword in str(current_key).lower() for keyword in DANGEROUS_KEYS):
@@ -150,14 +149,17 @@ class SupervisorGraph:
             return data
 
     def anonymizer_node(self, state: GraphState) -> dict:
-        """Intercepts the execution result and masks PII before returning."""
+        """Intercepts the execution result and masks PII in both the final answer and the retrieved context."""
         if state.get("error") or not state.get("result"):
             return {}
 
         agent_result = state["result"]
-        raw_data = agent_result.get("data", [])
 
-        agent_result["data"] = self._anonymize_recursive(raw_data)
+        if "data" in agent_result:
+            agent_result["data"] = self._anonymize_recursive(agent_result["data"])
+
+        if "context" in agent_result:
+            agent_result["context"] = self._anonymize_recursive(agent_result["context"])
 
         return {"result": agent_result}
 
