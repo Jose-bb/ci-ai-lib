@@ -16,7 +16,7 @@ langchain-community
 # --- Vector Database & RAG ---
 chromadb
 langchain-chroma
-pypdf
+pymupdf
 tiktoken
 
 # --- Privacy & Memory ---

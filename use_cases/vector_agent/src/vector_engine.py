@@ -29,7 +29,8 @@ class VectorEngine:
             azure_deployment=os.getenv("AZURE_OPENAI_EMBEDDING_MODEL"),
             openai_api_version=os.getenv("AZURE_OPENAI_API_VERSION"),
             azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-            api_key=os.getenv("AZURE_OPENAI_API_KEY")
+            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+            check_embedding_ctx_length=False
         )
 
     def _get_collection(self, collection_name: str) -> Chroma:

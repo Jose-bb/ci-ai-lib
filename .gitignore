@@ -209,3 +209,7 @@ __marimo__/
 
 # Local databases
 *.sqlite
+
+# Vector Agent data storage
+use_cases/vector_agent/data/**/*
+!use_cases/vector_agent/data/**/.gitkeep
