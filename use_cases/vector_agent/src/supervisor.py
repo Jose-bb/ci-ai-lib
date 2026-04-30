@@ -113,7 +113,14 @@ class SupervisorGraph:
         try:
             agent = RAGAgent(collection_id=selected_db, config_path=self.config_path)
             result = agent.process_query(enriched_question)
-            return {"result": result}
+            
+            agent_answer = result.get("data", "")
+            
+            return {
+                "result": result,
+                "history": [f"Agent answered: {agent_answer}"]
+            }
+            
         except Exception as e:
             return {"error": str(e)}
 

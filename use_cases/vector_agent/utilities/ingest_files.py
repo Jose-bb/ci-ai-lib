@@ -49,11 +49,21 @@ def process_file(file_path: str, collection_name: str, engine: VectorEngine):
         meta = doc.metadata
         meta["source_file"] = os.path.basename(file_path)
         metadatas.append(meta)
+    
+    batch_size = 50
+    print(f"-> Sending to Azure and ChromaDB in batches of {batch_size}...")
+    
+    for i in range(0, len(texts), batch_size):
+        batch_texts = texts[i:i + batch_size]
+        batch_metadatas = metadatas[i:i + batch_size]
+        
+        print(f"Uploading batch {i//batch_size + 1} (Chunks {i} to {min(i + batch_size, len(texts))})...")
+        try:
+            engine.add_documents(texts=batch_texts, collection_name=collection_name, metadatas=batch_metadatas)
+        except Exception as e:
+            print(f"Error in batch {i//batch_size + 1}: {e}")
 
-    # Send to Azure for embeddings and save to ChromaDB
-    print(f"-> Sending to Azure and ChromaDB (Collection: {collection_name})...")
-    result = engine.add_documents(texts=texts, collection_name=collection_name, metadatas=metadatas)
-    print(f"{result}")
+    print(f"Finished processing {file_path}\n")
 
 def main():
     print("Starting  Data Ingestion...\n")
