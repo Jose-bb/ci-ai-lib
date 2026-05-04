@@ -53,7 +53,7 @@ This use case provides a FastAPI endpoint that acts as an intelligent, multi-dom
   ```
 4. Run using Docker Compose:
    ```bash
-   docker-compose up --build -d vector-agent
+   docker compose up --build -d vector-agent
    ```
 5. The API will be available at http://localhost:8002/docs
 

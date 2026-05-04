@@ -1,6 +1,5 @@
 import os
 import yaml
-import redis
 import operator
 from typing import TypedDict, Optional, Annotated
 from langgraph.graph import StateGraph, START, END
@@ -13,6 +12,11 @@ from presidio_analyzer.nlp_engine import NlpEngineProvider
 from llm_interfaces.factory import LLMFactory
 from use_cases.vector_agent.src.rag_agent import RAGAgent
 
+# Constants for anonymization to prevent reallocation in recursive calls
+DANGEROUS_KEYS = {"password", "pass", "pwd", "token", "secret", "api_key", "hash"}
+DANGEROUS_ENTITIES = ["IP_ADDRESS", "CREDIT_CARD", "IBAN_CODE", "ES_NIF", "ES_NIE"]
+
+
 class GraphState(TypedDict):
     question: str
     selected_db: Optional[str]
@@ -20,16 +24,19 @@ class GraphState(TypedDict):
     error: Optional[str]
     history: Annotated[list[str], operator.add]
 
+
 class SupervisorGraph:
-    """Acts as the brain that routes user questions to the correct vector collection and ensures data privacy."""
+    """Routes user questions to the correct vector collection and ensures data privacy."""
     
     def __init__(self, config_path: str = "use_cases/vector_agent/config/prompts.yaml", provider: str = "azure_openai"):
+        """Initializes LLM, NLP engines for Presidio, Redis memory, and compiles the LangGraph."""
         self.config_path = config_path
         self.llm = LLMFactory.get_llm(provider)
         self.model_name = os.getenv("AZURE_OPENAI_MODEL")
         
         self.db_catalog = self._load_catalog()
 
+        # Initialize Presidio NLP Engine
         nlp_configuration = {
             "nlp_engine_name": "spacy",
             "models": [{"lang_code": "es", "model_name": "es_core_news_md"}]
@@ -40,24 +47,23 @@ class SupervisorGraph:
         self.analyzer = AnalyzerEngine(nlp_engine=nlp_engine, supported_languages=["es"])
         self.anonymizer = AnonymizerEngine()
 
+        # Initialize Redis Memory
         redis_host = os.getenv("REDIS_HOST", "host.docker.internal")
         redis_url = f"redis://{redis_host}:6380/0"
         self.memory = RedisSaver(redis_url)
-
         self.memory.setup()
         
         self.graph = self._build_graph()
 
     def _load_catalog(self) -> dict:
-        """Reads only the necessary routing descriptions from the YAML."""
-        with open(self.config_path, 'r') as file:
+        """Reads routing descriptions from the YAML file."""
+        with open(self.config_path, 'r', encoding='utf-8') as file:
             data = yaml.safe_load(file)
             return data.get("databases", {})
 
     def router_node(self, state: GraphState) -> dict:
-        """Reads the YAML descriptions and asks the LLM to decide which knowledge base is the best fit."""
+        """Uses the LLM to decide which knowledge base is the best fit for the question."""
         question = state["question"]
-
         history_text = "\n".join(state.get("history", []))
         
         catalog_text = ""
@@ -97,7 +103,7 @@ class SupervisorGraph:
         }
 
     def execution_node(self, state: GraphState) -> dict:
-        """Instantiates the RAG Agent using the selected collection ID and executes the retrieval/generation."""
+        """Executes the RAG Agent using the selected collection ID."""
         if state.get("error"):
             return {}
             
@@ -125,20 +131,10 @@ class SupervisorGraph:
             return {"error": str(e)}
 
     def _anonymize_recursive(self, data, current_key=None):
-        """Helper function to recursively traverse lists and dictionaries to mask specific strings and sensitive keys."""
-        DANGEROUS_KEYS = ["password", "pass", "pwd", "token", "secret", "api_key", "hash"]
-        
+        """Recursively traverses lists and dicts to mask specific strings and sensitive keys."""
         if current_key and any(keyword in str(current_key).lower() for keyword in DANGEROUS_KEYS):
             return "<REDACTED_SECRET>"
         
-        DANGEROUS_ENTITIES = [
-            "IP_ADDRESS",
-            "CREDIT_CARD",
-            "IBAN_CODE",
-            "ES_NIF",
-            "ES_NIE"
-        ]
-
         if isinstance(data, str):
             results = self.analyzer.analyze(
                 text=data, 
@@ -156,7 +152,7 @@ class SupervisorGraph:
             return data
 
     def anonymizer_node(self, state: GraphState) -> dict:
-        """Intercepts the execution result and masks PII in both the final answer and the retrieved context."""
+        """Masks PII in both the final answer and the retrieved context."""
         if state.get("error") or not state.get("result"):
             return {}
 
@@ -171,7 +167,7 @@ class SupervisorGraph:
         return {"result": agent_result}
 
     def _build_graph(self):
-        """Maps out the flow: START -> Router -> Executor -> Anonymizer -> END."""
+        """Maps out the flow: START -> router -> executor -> anonymizer -> END."""
         builder = StateGraph(GraphState)
         
         builder.add_node("router", self.router_node)

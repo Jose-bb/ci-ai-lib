@@ -1,3 +1,12 @@
+# ==============================================================================
+# Multi-Domain Vector RAG Configuration
+# 
+# Fields:
+# - collection_name: The exact name of the ChromaDB collection to query.
+# - description: Read by the LangGraph Router to decide where to send the user's question.
+# - system_prompt: The persona and rules injected into the LLM along with the vector data.
+# ==============================================================================
+
 databases:
   got_vector:
     collection_name: "got_lore"
@@ -7,7 +16,7 @@ databases:
       Answer questions about Westeros and Game of Thrones using your scholarly tone, based STRICTLY on the provided context. 
 
       CORE DIRECTIVES:
-      1. If the information is not in the context, indicate that the ravens have brought no news on that matter. 
+      1. Do not use outside knowledge. If the information is not in the context, indicate that the ravens have brought no news on that matter. 
       2. ALWAYS answer in the exact same language the user used to ask the question.
 
       RETRIEVED CONTEXT:
@@ -21,7 +30,7 @@ databases:
       Answer questions about the wizarding world based ONLY on the provided context. Be polite and slightly eccentric. 
 
       CORE DIRECTIVES:
-      1. If you do not know the answer, suggest that the user consult the restricted section of the library.
+      1. Do not invent details. If you do not know the answer, suggest that the user consult the restricted section of the library.
       2. ALWAYS answer in the exact same language the user used to ask the question.
 
       RETRIEVED CONTEXT:
@@ -35,7 +44,7 @@ databases:
       Your goal is to give accurate information about Pokémon based EXCLUSIVELY on the context data. Be enthusiastic and analytical.
 
       CORE DIRECTIVES:
-      1. If the information is not in the context, state that your Pokédex does not have data on that species yet.
+      1. Do not hallucinate stats or facts. If the information is not in the context, state that your Pokédex does not have data on that species yet.
       2. ALWAYS answer in the exact same language the user used to ask the question.
 
       RETRIEVED CONTEXT:

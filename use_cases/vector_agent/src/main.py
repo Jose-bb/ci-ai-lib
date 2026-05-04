@@ -1,10 +1,10 @@
 import os
 import sys
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from typing import Optional, Any
+from pydantic import BaseModel, Field
+from typing import Optional, Any, List, Dict
 
-# Adding the root to sys.path to allow imports from llm_interfaces
+# Ensure the root directory is in the path (fallback if PYTHONPATH is missing)
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..'))
 if ROOT_DIR not in sys.path:
     sys.path.append(ROOT_DIR)
@@ -13,29 +13,30 @@ from use_cases.vector_agent.src.supervisor import SupervisorGraph
 
 app = FastAPI(title="Vector RAG Agent API", version="1.0.0")
 
+# Initialize the supervisor
 CONFIG_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../config/prompts.yaml'))
 supervisor = SupervisorGraph(config_path=CONFIG_PATH)
 
 class QueryRequest(BaseModel):
-    """QueryRequest class defines the schema for the request."""
-    question: str
-    session_id: str = "default_session"
+    """Schema for incoming RAG queries."""
+    question: str = Field(..., description="The natural language question to ask the RAG agent.")
+    session_id: str = Field(default="default_session", description="Unique ID to maintain conversational memory.")
 
 class QueryResponse(BaseModel):
-    """QueryResponse class defines the schema for the outgoing response."""
+    """Schema for the outgoing RAG response."""
     question: str
-    routed_db: Optional[str] = None
-    retrieved_context: Optional[Any] = None 
-    data: Any
+    routed_db: Optional[str] = Field(default=None, description="The knowledge base selected by the router.")
+    retrieved_context: Optional[List[Dict[str, Any]]] = Field(default=None, description="Chunks retrieved from the vector DB.")
+    data: Optional[Any] = Field(default=None, description="The final generated answer or payload.")
     error: Optional[str] = None
 
 @app.post("/ask-rag", response_model=QueryResponse)
 async def ask_rag(request: QueryRequest):
-    """Main endpoint. Routes the natural language question through the RAG workflow."""
+    """Routes the natural language question through the RAG workflow."""
     try:
         state = supervisor.run(user_question=request.question, session_id=request.session_id)
         
-        # Catch routing failures
+        # Catch explicit routing or execution failures
         if state.get("error"):
             raise HTTPException(status_code=400, detail=state["error"])
 
@@ -54,5 +55,5 @@ async def ask_rag(request: QueryRequest):
 
 @app.get("/health")
 async def health():
-    """Health check for the Vector RAG API."""
+    """Health check for the API."""
     return {"status": "ok", "agent": "Vector RAG Supervisor up and running"}
