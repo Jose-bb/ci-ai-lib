@@ -213,3 +213,4 @@ __marimo__/
 # Vector Agent data storage
 use_cases/vector_agent/data/**/*
 !use_cases/vector_agent/data/**/.gitkeep
+use_cases/vector_agent/utilities/ingestion_state.json

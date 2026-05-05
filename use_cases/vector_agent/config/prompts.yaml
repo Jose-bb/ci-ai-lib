@@ -3,6 +3,7 @@
 # 
 # Fields:
 # - collection_name: The exact name of the ChromaDB collection to query.
+#                    This must exactly match the name of the folder inside the 'data/' directory where the source files are stored.
 # - description: Read by the LangGraph Router to decide where to send the user's question.
 # - system_prompt: The persona and rules injected into the LLM along with the vector data.
 # ==============================================================================

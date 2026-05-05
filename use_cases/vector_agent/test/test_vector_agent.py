@@ -26,7 +26,7 @@ def setup_test_collection():
     test_collection = "test_fixture_collection"
     
     # Ingest dummy data
-    dummy_text = ["El código secreto de la caja fuerte de la base RAG es Piña Colada 2024."]
+    dummy_text = ["El código secreto de la caja fuerte de la base RAG es MJ Bad 1987."]
     metadata = [{"source": "test_fixture"}]
     engine.add_documents(texts=dummy_text, collection_name=test_collection, metadatas=metadata)
     
@@ -51,7 +51,7 @@ def test_integration_vector_engine(setup_test_collection):
     assert isinstance(results, list)
     assert len(results) > 0
     # Verify the real database correctly matched the semantic meaning
-    assert "Piña Colada" in results[0]["content"]
+    assert "MJ Bad" in results[0]["content"]
 
 
 @patch('use_cases.vector_agent.src.vector_engine.VectorEngine.search_similarity')
@@ -91,6 +91,11 @@ def test_pii_anonymization_unit():
     assert "database_log" in anonymized_str 
 
 
+# These tests act as a "Demonstration Template" and are tightly coupled to
+# the default configuration in `config/prompts.yaml` (Game of Thrones, Pokemon).
+# If you clone this repository and change the domains for your own use case,
+# you MUST update the questions and assertions in these tests to match your new LangGraph configuration.
+
 def test_router_out_of_domain_handling():
     """Test 4: Verifies the Router rejects questions outside of its configured domains."""
     response = client.post("/ask-rag", json={
@@ -103,7 +108,7 @@ def test_router_out_of_domain_handling():
 
 
 def test_conversational_memory_active():
-    """Test 5 (API): Verifies that Redis Stack maintains cross-turn context for ambiguous questions."""
+    """Test 5: Verifies that Redis Stack maintains cross-turn context for ambiguous questions."""
     session_id = "test_memory_vector_1"
 
     # Establish the context

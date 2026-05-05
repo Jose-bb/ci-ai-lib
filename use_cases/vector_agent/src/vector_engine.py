@@ -32,6 +32,7 @@ class VectorEngine:
             check_embedding_ctx_length=False
         )
 
+
     def _get_collection(self, collection_name: str) -> Chroma:
         """Retrieves or creates a LangChain Chroma collection instance."""
         return Chroma(
@@ -39,6 +40,7 @@ class VectorEngine:
             collection_name=collection_name,
             embedding_function=self.embeddings
         )
+
 
     def search_similarity(self, query: str, collection_name: str, k: int = 4) -> Union[List[Dict[str, Any]], str]:
         """Executes a semantic search and returns the top 'k' results or an error string."""
@@ -68,6 +70,7 @@ class VectorEngine:
         except Exception as e:
             return f"Vector Database Error: {str(e)}"
 
+
     def add_documents(self, texts: List[str], collection_name: str, metadatas: Optional[List[Dict[str, Any]]] = None) -> str:
         """Embeds and stores a list of texts in the specified ChromaDB collection."""
         try:
@@ -81,3 +84,16 @@ class VectorEngine:
             
         except Exception as e:
             return f"Ingestion Error: {str(e)}"
+
+
+    def delete_by_source(self, collection_name: str, source_name: str) -> str:
+        """Deletes all document chunks originating from a specific source file."""
+        try:
+            collection = self.client.get_collection(collection_name)
+            collection.delete(where={"source": source_name})
+            return f"Success: Old records from '{source_name}' deleted from '{collection_name}'."
+        except ValueError:
+            # If the collection doesn't exist yet, Chroma raises a ValueError.
+            return f"Skipped: Collection '{collection_name}' does not exist yet."
+        except Exception as e:
+            return f"Deletion Error: {str(e)}"

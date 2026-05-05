@@ -10,7 +10,7 @@ This use case provides a FastAPI endpoint that acts as an intelligent, multi-dom
   - `supervisor.py`: LangGraph orchestrator that routes user intent to the correct knowledge domain and manages conversational state with Redis.
   - `rag_agent.py`: Worker agent that injects retrieved context into prompts to generate grounded, natural language answers.
   - `vector_engine.py`: Engine responsible for embedding text and interacting with ChromaDB for similarity search.
-- `data/`: Contains the raw knowledge files (TXT, CSV, PDF) organized by domain.
+- `data/`: Contains the raw knowledge files (TXT, CSV, PDF) organized by domain. **The subfolder names inside this directory must exactly match the `collection_name` variables defined in your `prompts.yaml`.**
 - `test/`: Contains unit tests for the agent suite (using pytest).
 - `utilities/`: Contains `ingest_files.py`, a robust ETL script with batch processing to extract, chunk, and ingest documents into ChromaDB.
 - `Dockerfile`: Containerization setup for this microservice.
@@ -19,11 +19,12 @@ This use case provides a FastAPI endpoint that acts as an intelligent, multi-dom
 ## Features
 
 - **Semantic Routing (LangGraph)**: Automatically analyzes the user's intent and routes the query to the correct vector collection (e.g., Game of Thrones, Harry Potter, Pokédex).
-- **Configuration-Driven**: Adding a new knowledge base or changing an agent's persona requires zero Python code changes; it is entirely managed via `prompts.yaml`.
+- **Configuration-Driven**: Adding a new knowledge base requires zero Python code changes. Just create a folder in `data/` and add its exact name to `prompts.yaml` along with its persona.
+- **Data Privacy Shield (PII Anonymization)**: Dual-layer firewall powered by Microsoft Presidio and spaCy. It intercepts, detects, and masks sensitive data (like IPs or API keys) from user prompts before sending them to the LLM, ensuring enterprise-grade compliance.
 - **Retrieval-Augmented Generation (RAG)**: Leverages ChromaDB for high-speed similarity search, ensuring the LLM only answers based on your private contextual data.
-- **Anti-Hallucination Guardrails**: Strict system prompting ensures the agent admits when it doesn't know the answer instead of fabricating information (e.g., "The ravens have brought no news on that matter").
-- **Session Isolation & Contextual Memory**: Integrates Redis with LangGraph to support multi-turn conversations using `session_id`. The agent leverages historical state to seamlessly resolve ambiguous follow-up questions (e.g., "And who gets the white one?").
-- **Resilient Batch Ingestion**: Features an optimized ETL pipeline that chunks large documents and uploads them to Azure/ChromaDB in manageable batches to prevent API rate limits and 500 Internal Server Errors.
+- **Anti-Hallucination Guardrails**: Strict system prompting ensures the agent admits when it doesn't know the answer instead of fabricating information.
+- **Session Isolation & Contextual Memory**: Integrates Redis with LangGraph to support multi-turn conversations using `session_id`.
+- **Intelligent Batch Ingestion**: Features an optimized ETL pipeline that uses MD5 hashing to detect file changes. It only processes new or modified documents and automatically deletes obsolete vectors before updating, preventing data duplication and saving LLM token costs.
 - **FastAPI integration**: Clean and fast API endpoints with Swagger UI documentation.
 
 ## API Endpoints
@@ -59,7 +60,11 @@ This use case provides a FastAPI endpoint that acts as an intelligent, multi-dom
 
 ## Running Tests
 
-To run the automated test suite and verify the integrity of the agent's logic and security shields, run the following command from the root directory:
+**The API endpoint tests are currently coupled to the default demonstration configuration (got_vector, pokedex_vector). If you clone this repository and modify config/prompts.yaml to fit your own business use case, you must update the assertions in test_vector_agent.py to match your new domains.**
+
+The test suite uses a hybrid strategy of `unittest.mock` and Pytest fixtures, meaning it does not consume LLM tokens, executes in seconds, and runs perfectly even if the database is completely empty.
+
+To run the automated test suite and verify the integrity of the agent's logic, memory, and PII shields, run:
     ```bash
    docker compose run --rm vector-agent pytest use_cases/vector_agent/test/
    ```
