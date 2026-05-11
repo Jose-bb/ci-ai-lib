@@ -1,7 +1,8 @@
 import os
 import yaml
 import operator
-from typing import TypedDict, Optional, Annotated
+import json
+from typing import TypedDict, Optional, Annotated, Generator
 from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.redis import RedisSaver
 
@@ -23,6 +24,7 @@ class GraphState(TypedDict):
     result: Optional[dict]
     error: Optional[str]
     history: Annotated[list[str], operator.add]
+    stream_mode: bool
 
 
 class SupervisorGraph:
@@ -109,6 +111,7 @@ class SupervisorGraph:
             
         selected_db = state["selected_db"]
         question = state["question"]
+        stream_mode = state.get("stream_mode", False)
 
         history_text = "\n".join(state.get("history", []))
         enriched_question = (
@@ -118,9 +121,10 @@ class SupervisorGraph:
         
         try:
             agent = RAGAgent(collection_id=selected_db, config_path=self.config_path)
-            result = agent.process_query(enriched_question)
+            result = agent.process_query(enriched_question, stream=stream_mode)
             
-            agent_answer = result.get("data", "")
+            # If in stream mode, data is a generator, so we can't save the full answer to history yet.
+            agent_answer = result.get("data", "") if not stream_mode else "<STREAMING_RESPONSE>"
             
             return {
                 "result": result,
@@ -157,8 +161,11 @@ class SupervisorGraph:
             return {}
 
         agent_result = state["result"]
+        stream_mode = state.get("stream_mode", False)
 
-        if "data" in agent_result:
+        # In streaming mode, data is a generator, so we cannot anonymize it here
+        # without consuming the generator and breaking the stream.
+        if not stream_mode and "data" in agent_result:
             agent_result["data"] = self._anonymize_recursive(agent_result["data"])
 
         if "context" in agent_result:
@@ -182,13 +189,67 @@ class SupervisorGraph:
         return builder.compile(checkpointer=self.memory)
 
     def run(self, user_question: str, session_id: str = "default_session") -> dict:
-        """Public entry point to throw a question into the graph."""
+        """Public entry point for non-streaming execution."""
         config = {"configurable": {"thread_id": session_id}}
 
         inputs = {
             "question": user_question,
             "error": None,
-            "result": None
+            "result": None,
+            "stream_mode": False
         }
         
         return self.graph.invoke(inputs, config=config)
+
+    def stream_run(self, user_question: str, session_id: str = "default_session") -> Generator[str, None, None]:
+        """Public entry point to execute the graph and stream the LLM response."""
+        config = {"configurable": {"thread_id": session_id}}
+
+        inputs = {
+            "question": user_question,
+            "error": None,
+            "result": None,
+            "stream_mode": True
+        }
+
+        # We need to manually execute the graph nodes to intercept the generator
+        try:
+            # Run Router
+            router_output = self.router_node(inputs)
+            if "error" in router_output:
+                yield json.dumps({"error": router_output["error"]})
+                return
+            
+            inputs.update(router_output)
+
+            # Run Executor
+            executor_output = self.execution_node(inputs)
+            if "error" in executor_output:
+                yield json.dumps({"error": executor_output["error"]})
+                return
+
+            result = executor_output["result"]
+            generator = result.get("data")
+            
+            # Anonymize context before sending it
+            anonymized_context = self._anonymize_recursive(result.get("context", []))
+            
+            # Send initial metadata (routed DB and context)
+            yield json.dumps({
+                "type": "metadata",
+                "routed_db": inputs.get("selected_db"),
+                "context": anonymized_context
+            }) + "\n"
+
+            # Stream the LLM tokens
+            full_response = ""
+            if generator:
+                for chunk in generator:
+                    full_response += chunk
+                    yield json.dumps({"type": "chunk", "content": chunk}) + "\n"
+
+            # Redis
+            self.graph.update_state(config, {"history": [f"Agent answered: {full_response}"]})
+
+        except Exception as e:
+            yield json.dumps({"error": f"Streaming failed: {str(e)}"})

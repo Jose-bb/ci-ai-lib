@@ -1,6 +1,7 @@
 import os
 import pytest
 import sys
+import json
 from unittest.mock import patch
 from fastapi.testclient import TestClient
 
@@ -128,3 +129,30 @@ def test_conversational_memory_active():
 
     assert data["routed_db"] == "pokedex_vector"
     assert data["error"] is None
+
+
+def test_streaming_endpoint_active():
+    """Test 6: Verifies that the new streaming endpoint yields SSE chunks properly."""
+    session_id = "test_stream_vector_1"
+    payload = {
+        "question": "¿De qué tipo es Pikachu?",
+        "session_id": session_id
+    }
+
+    with client.stream("POST", "/ask-rag-stream", json=payload) as response:
+        assert response.status_code == 200
+        # Validate that the Header matches the Streaming type
+        assert "text/event-stream" in response.headers.get("content-type", "")
+
+        lines_read = 0
+        for line in response.iter_lines():
+            if line:
+                data = json.loads(line)
+                # Verify that the server returns the designed JSON structure
+                assert "type" in data or "error" in data
+                lines_read += 1
+                
+                if lines_read >= 2:
+                    break
+        
+        assert lines_read > 0

@@ -1,6 +1,7 @@
 import os
 import sys
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from typing import Optional, Any, List, Dict
 
@@ -11,7 +12,7 @@ if ROOT_DIR not in sys.path:
 
 from use_cases.vector_agent.src.supervisor import SupervisorGraph
 
-app = FastAPI(title="Vector RAG Agent API", version="1.0.0")
+app = FastAPI(title="Vector RAG Agent API", version="2.0.0")
 
 # Initialize the supervisor
 CONFIG_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../config/prompts.yaml'))
@@ -22,6 +23,7 @@ class QueryRequest(BaseModel):
     question: str = Field(..., description="The natural language question to ask the RAG agent.")
     session_id: str = Field(default="default_session", description="Unique ID to maintain conversational memory.")
 
+
 class QueryResponse(BaseModel):
     """Schema for the outgoing RAG response."""
     question: str
@@ -30,9 +32,10 @@ class QueryResponse(BaseModel):
     data: Optional[Any] = Field(default=None, description="The final generated answer or payload.")
     error: Optional[str] = None
 
+
 @app.post("/ask-rag", response_model=QueryResponse)
 async def ask_rag(request: QueryRequest):
-    """Routes the natural language question through the RAG workflow."""
+    """Routes the natural language question through the RAG workflow (Standard/Blocking)."""
     try:
         state = supervisor.run(user_question=request.question, session_id=request.session_id)
         
@@ -52,6 +55,22 @@ async def ask_rag(request: QueryRequest):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
+
+
+@app.post("/ask-rag-stream")
+async def ask_rag_stream(request: QueryRequest):
+    """Routes the question and streams the response back token by token (Server-Sent Events)."""
+    try:
+        generator = supervisor.stream_run(
+            user_question=request.question, 
+            session_id=request.session_id
+        )
+        
+        return StreamingResponse(generator, media_type="text/event-stream")
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
+
 
 @app.get("/health")
 async def health():
