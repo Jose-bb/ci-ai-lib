@@ -143,6 +143,7 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+venv_vector/
 
 # Spyder project settings
 .spyderproject
@@ -208,3 +209,8 @@ __marimo__/
 
 # Local databases
 *.sqlite
+
+# Vector Agent data storage
+use_cases/vector_agent/data/**/*
+!use_cases/vector_agent/data/**/.gitkeep
+use_cases/vector_agent/utilities/ingestion_state.json

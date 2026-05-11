@@ -1,0 +1,21 @@
+services:
+  chroma-db:
+    image: chromadb/chroma:latest
+    container_name: vector-agent-chroma
+    ports:
+      - "8000:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+
+  redis_memory:
+    image: redis/redis-stack-server:latest
+    container_name: vector-redis-memory
+    restart: always
+    ports:
+      - "6380:6379"
+    volumes:
+      - vector_redis_data:/data
+
+volumes:
+  chroma_data:
+  vector_redis_data:
