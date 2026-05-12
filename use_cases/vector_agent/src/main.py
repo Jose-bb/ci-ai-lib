@@ -4,6 +4,16 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from typing import Optional, Any, List, Dict
+from dotenv import load_dotenv
+
+from phoenix.otel import register
+from openinference.instrumentation.langchain import LangChainInstrumentor
+
+load_dotenv()
+
+# Telemetry & Observability Setup (Arize Phoenix)
+tracer_provider = register()
+LangChainInstrumentor().instrument(tracer_provider=tracer_provider)
 
 # Ensure the root directory is in the path (fallback if PYTHONPATH is missing)
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..'))
@@ -12,7 +22,7 @@ if ROOT_DIR not in sys.path:
 
 from use_cases.vector_agent.src.supervisor import SupervisorGraph
 
-app = FastAPI(title="Vector RAG Agent API", version="2.0.0")
+app = FastAPI(title="Vector RAG Agent API", version="3.0.0")
 
 # Initialize the supervisor
 CONFIG_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../config/prompts.yaml'))
