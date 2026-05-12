@@ -30,7 +30,7 @@ class RAGAgent:
                 
             return data["databases"][collection_id]
 
-    def process_query(self, user_question: str) -> dict:
+    def process_query(self, user_question: str, stream: bool = False) -> dict:
         """Retrieves context, injects it into the prompt, and generates an LLM answer."""
         collection_name = self.config.get("collection_name", self.collection_id)
         
@@ -62,7 +62,13 @@ class RAGAgent:
             {"role": "user", "content": user_question}
         ]
 
-        generated_answer = self.llm.invoke(messages=messages, model=self.model_name)
+        # Choose execution mode
+        if stream:
+            # Returns a Python Generator that yields chunks
+            generated_answer = self.llm.invoke_stream(messages=messages, model=self.model_name)
+        else:
+            # Returns the full string immediately
+            generated_answer = self.llm.invoke(messages=messages, model=self.model_name)
 
         return {
             "context": search_results,

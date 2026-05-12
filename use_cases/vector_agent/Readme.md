@@ -1,4 +1,4 @@
-# Multi-Agent VecDB Router with PII Privacy & Redis Memory (V1)
+# Multi-Agent VecDB Router with PII Privacy, Redis Memory & SSE Streaming (V2)
 
 This use case provides a FastAPI endpoint that acts as an intelligent, multi-domain Retrieval-Augmented Generation (RAG) system. Powered by LangGraph, ChromaDB, Azure OpenAI, Microsoft Presidio, and Redis, it evaluates natural language questions, routes them to the appropriate knowledge base based on a YAML configuration, performs semantic search to retrieve relevant context, and generates highly accurate, hallucination-free answers while maintaining persistent conversational memory for multi-turn context.
 
@@ -12,7 +12,9 @@ This use case provides a FastAPI endpoint that acts as an intelligent, multi-dom
   - `vector_engine.py`: Engine responsible for embedding text and interacting with ChromaDB for similarity search.
 - `data/`: Contains the raw knowledge files (TXT, CSV, PDF) organized by domain. **The subfolder names inside this directory must exactly match the `collection_name` variables defined in your `prompts.yaml`.**
 - `test/`: Contains unit tests for the agent suite (using pytest).
-- `utilities/`: Contains `ingest_files.py`, a robust ETL script with batch processing to extract, chunk, and ingest documents into ChromaDB.
+- `utilities/`: 
+  - `ingest_files.py`: A robust ETL script with batch processing to extract, chunk, and ingest documents into ChromaDB.
+  - `test_normal.py` & `test_stream.py`: Python CLI scripts to test the classic blocking API and the real-time Server-Sent Events (SSE) streaming API.
 - `Dockerfile`: Containerization setup for this microservice.
 - `docker-compose.db.yaml`: Isolated infrastructure configuration for ChromaDB, and Redis Stack servers.
 
@@ -22,6 +24,7 @@ This use case provides a FastAPI endpoint that acts as an intelligent, multi-dom
 - **Configuration-Driven**: Adding a new knowledge base requires zero Python code changes. Just create a folder in `data/` and add its exact name to `prompts.yaml` along with its persona.
 - **Data Privacy Shield (PII Anonymization)**: Dual-layer firewall powered by Microsoft Presidio and spaCy. It intercepts, detects, and masks sensitive data (like IPs or API keys) from user prompts before sending them to the LLM, ensuring enterprise-grade compliance.
 - **Retrieval-Augmented Generation (RAG)**: Leverages ChromaDB for high-speed similarity search, ensuring the LLM only answers based on your private contextual data.
+- **Real-Time Streaming (SSE)**: Hybrid API architecture offering both classic blocking responses and Server-Sent Events (SSE) streaming for real-time, token-by-token LLM generation, drastically reducing Time-to-First-Token (TTFT) for long responses.
 - **Anti-Hallucination Guardrails**: Strict system prompting ensures the agent admits when it doesn't know the answer instead of fabricating information.
 - **Session Isolation & Contextual Memory**: Integrates Redis with LangGraph to support multi-turn conversations using `session_id`.
 - **Intelligent Batch Ingestion**: Features an optimized ETL pipeline that uses MD5 hashing to detect file changes. It only processes new or modified documents and automatically deletes obsolete vectors before updating, preventing data duplication and saving LLM token costs.
@@ -30,7 +33,8 @@ This use case provides a FastAPI endpoint that acts as an intelligent, multi-dom
 ## API Endpoints
 
 - `GET /health`: Health check.
-- `POST /ask-rag`: Send a natural language question to get the routed database, retrieved context chunks, and the final generated answer.
+- `POST /ask-rag`: (Standard/Blocking) Send a natural language question to get the routed database, retrieved context chunks, and the final generated answer in a single JSON payload.
+- `POST /ask-rag-stream`: (Streaming) Sends the query and returns a real-time stream of server-sent events, delivering the routed DB metadata first, followed by the LLM response token-by-token.
 
 ### Example Request
 
@@ -57,6 +61,7 @@ This use case provides a FastAPI endpoint that acts as an intelligent, multi-dom
    docker compose up --build -d vector-agent
    ```
 5. The API will be available at http://localhost:8002/docs
+*Note: Swagger UI does not perfectly render Server-Sent Events (SSE). To experience the real-time typewriter effect of the `/ask-rag-stream` endpoint, use the provided scripts in the `utilities/` folder (`python utilities/test_stream.py`).*
 
 ## Running Tests
 
