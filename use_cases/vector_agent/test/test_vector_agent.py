@@ -31,14 +31,15 @@ def setup_test_collection():
     metadata = [{"source": "test_fixture"}]
     engine.add_documents(texts=dummy_text, collection_name=test_collection, metadatas=metadata)
     
-    # Yield control to the tests
-    yield test_collection
-    
-    # Clean up the database so we leave no trace
     try:
-        engine.client.delete_collection(test_collection)
-    except Exception:
-        pass
+        # Yield control to the tests
+        yield test_collection
+    finally:
+        # Clean up the database so we leave no trace
+        try:
+            engine.client.delete_collection(test_collection)
+        except Exception:
+            pass
 
 
 def test_integration_vector_engine(setup_test_collection):
@@ -144,15 +145,19 @@ def test_streaming_endpoint_active():
         # Validate that the Header matches the Streaming type
         assert "text/event-stream" in response.headers.get("content-type", "")
 
-        lines_read = 0
+        chunks_received = 0
+        metadata_received = False
+
         for line in response.iter_lines():
             if line:
                 data = json.loads(line)
+                assert "error" not in data
+
                 # Verify that the server returns the designed JSON structure
-                assert "type" in data or "error" in data
-                lines_read += 1
+                if data.get("type") == "metadata":
+                    metadata_received = True
+                elif data.get("type") == "chunk":
+                    chunks_received += 1
                 
-                if lines_read >= 2:
-                    break
-        
-        assert lines_read > 0
+        assert metadata_received is True
+        assert chunks_received > 0

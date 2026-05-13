@@ -16,6 +16,13 @@ services:
     volumes:
       - vector_redis_data:/data
 
+  phoenix_telemetry:
+    image: arizephoenix/phoenix:latest
+    container_name: vector-agent-phoenix
+    ports:
+      - "6006:6006"
+      - "4317:4317"
+
 volumes:
   chroma_data:
   vector_redis_data:

@@ -6,6 +6,10 @@ from dotenv import load_dotenv
 from langchain_community.document_loaders import PyMuPDFLoader, CSVLoader, TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
+from phoenix.otel import register
+from openinference.instrumentation.langchain import LangChainInstrumentor
+from opentelemetry import trace
+
 # Add root directory to sys.path to resolve internal modules
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..'))
 if ROOT_DIR not in sys.path:
@@ -14,6 +18,21 @@ if ROOT_DIR not in sys.path:
 from use_cases.vector_agent.src.vector_engine import VectorEngine
 
 STATE_FILE = os.path.join(os.path.dirname(__file__), 'ingestion_state.json')
+
+
+def is_in_docker() -> bool:
+    """Detects if the Python script is running inside a Docker container."""
+    return os.path.exists('/.dockerenv')
+
+
+def auto_patch_localhost():
+    """Automatically replaces 'host.docker.internal' with '127.0.0.1' if running locally."""
+    if not is_in_docker():
+        print("Local execution detected. Redirecting traffic to 127.0.0.1...")
+        for key, value in os.environ.items():
+            if value and isinstance(value, str) and "host.docker.internal" in value:
+                os.environ[key] = value.replace("host.docker.internal", "127.0.0.1")
+
 
 def get_file_hash(file_path: str) -> str:
     """Calculates the MD5 hash of a file to detect if its content has changed."""
@@ -90,10 +109,15 @@ def process_file(file_path: str, collection_name: str, engine: VectorEngine) -> 
     chunked_docs = text_splitter.split_documents(raw_documents)
     print(f"-> Split into {len(chunked_docs)} manageable chunks.")
 
-    # Metadata standardization
     texts = [doc.page_content for doc in chunked_docs]
-    metadatas = []
     
+    # Guard against completely empty files
+    if not texts:
+        print("-> No text found in file. Skipping ingestion.")
+        return True # Return True to save state so we don't keep retrying an empty file
+
+    # Metadata standardization
+    metadatas = []
     for doc in chunked_docs:
         meta = doc.metadata.copy() 
         meta["source"] = file_name
@@ -103,16 +127,32 @@ def process_file(file_path: str, collection_name: str, engine: VectorEngine) -> 
     batch_size = 50
     print(f"-> Sending to Azure and ChromaDB in batches of {batch_size}...")
     
-    for i in range(0, len(texts), batch_size):
-        batch_texts = texts[i:i + batch_size]
-        batch_metadatas = metadatas[i:i + batch_size]
+    tracer = trace.get_tracer("ingestion_tracker")
+    
+    # Create a custom parent trace
+    with tracer.start_as_current_span(f"Process_File_{file_name}") as parent_span:
+        parent_span.set_attribute("file.name", file_name)
+        parent_span.set_attribute("file.collection", collection_name)
+        parent_span.set_attribute("file.total_chunks", len(texts))
         
-        print(f"    Uploading batch {i//batch_size + 1} (Chunks {i} to {min(i + batch_size, len(texts))})...")
-        try:
-            engine.add_documents(texts=batch_texts, collection_name=collection_name, metadatas=batch_metadatas)
-        except Exception as e:
-            print(f"    Error in batch {i//batch_size + 1}: {e}")
-            return False # Fail out to prevent false positive state saving
+        for i in range(0, len(texts), batch_size):
+            batch_texts = texts[i:i + batch_size]
+            batch_metadatas = metadatas[i:i + batch_size]
+            
+            print(f"    Uploading batch {i//batch_size + 1} (Chunks {i} to {min(i + batch_size, len(texts))})...")
+            
+            # Create the custom child trace
+            with tracer.start_as_current_span(f"Batch_{i//batch_size + 1}") as child_span:
+                child_span.set_attribute("batch.size", len(batch_texts))
+                char_count = sum(len(text) for text in batch_texts)
+                child_span.set_attribute("batch.char_count", char_count)
+                
+                result_msg = engine.add_documents(texts=batch_texts, collection_name=collection_name, metadatas=batch_metadatas)
+            
+            if result_msg.startswith("Ingestion Error"):
+                print(f"    FATAL: {result_msg}")
+                parent_span.set_status(trace.Status(trace.StatusCode.ERROR, result_msg))
+                return False # Fail out to prevent false positive state saving
 
     print(f"Finished processing {file_name}\n")
     return True
@@ -122,6 +162,14 @@ def main():
     """Main entry point to scan data folders and trigger ingestion."""
     print("Starting Data Ingestion...\n")
     load_dotenv()
+    
+    # Auto-patch host.docker.internal to localhost if running outside Docker
+    auto_patch_localhost()
+    
+    # Initialize Telemetry to track Azure OpenAI embedding costs
+    print("Connecting the telemetry tracker (Phoenix)...")
+    tracer_provider = register()
+    LangChainInstrumentor().instrument(tracer_provider=tracer_provider)
     
     try:
         engine = VectorEngine()
@@ -168,6 +216,9 @@ def main():
                         state[collection_name][file_name] = current_hash
                         save_state(state)
 
+    print("\nSending pending traces to Phoenix...")
+    if hasattr(tracer_provider, 'force_flush'):
+        tracer_provider.force_flush()
 
 if __name__ == "__main__":
     main()

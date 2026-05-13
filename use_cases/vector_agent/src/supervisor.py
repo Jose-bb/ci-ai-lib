@@ -2,6 +2,9 @@ import os
 import yaml
 import operator
 import json
+import queue
+import threading
+import contextvars
 from typing import TypedDict, Optional, Annotated, Generator
 from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.redis import RedisSaver
@@ -12,6 +15,10 @@ from presidio_analyzer.nlp_engine import NlpEngineProvider
 
 from llm_interfaces.factory import LLMFactory
 from use_cases.vector_agent.src.rag_agent import RAGAgent
+
+# ContextVar creates a secure, thread-local tunnel to pass the queue to the LangGraph worker 
+# without breaking LangGraph's strict state schema requirements.
+stream_queue_var = contextvars.ContextVar("stream_queue", default=None)
 
 # Constants for anonymization to prevent reallocation in recursive calls
 DANGEROUS_KEYS = {"password", "pass", "pwd", "token", "secret", "api_key", "hash"}
@@ -112,6 +119,9 @@ class SupervisorGraph:
         selected_db = state["selected_db"]
         question = state["question"]
         stream_mode = state.get("stream_mode", False)
+        
+        # Extract the queue from the invisible tunnel established by the main thread
+        stream_queue = stream_queue_var.get()
 
         history_text = "\n".join(state.get("history", []))
         enriched_question = (
@@ -123,8 +133,33 @@ class SupervisorGraph:
             agent = RAGAgent(collection_id=selected_db, config_path=self.config_path)
             result = agent.process_query(enriched_question, stream=stream_mode)
             
-            # If in stream mode, data is a generator, so we can't save the full answer to history yet.
-            agent_answer = result.get("data", "") if not stream_mode else "<STREAMING_RESPONSE>"
+            agent_answer = ""
+            
+            if stream_mode and stream_queue:
+                generator = result.get("data")
+                anonymized_context = self._anonymize_recursive(result.get("context", []))
+                
+                # Push the metadata first so the frontend can render sources immediately
+                stream_queue.put(json.dumps({
+                    "type": "metadata",
+                    "routed_db": selected_db,
+                    "context": anonymized_context
+                }) + "\n")
+                
+                if generator:
+                    # We iterate over the generator here inside the node. 
+                    # This keeps the OpenTelemetry span active until the last token is generated.
+                    for chunk in generator:
+                        agent_answer += chunk
+                        stream_queue.put(json.dumps({"type": "chunk", "content": chunk}) + "\n")
+                
+                # Replace the generator object with a plain string so Redis can serialize it without crashing
+                result["data"] = agent_answer
+                
+                # Notifies FastAPI that generation is complete
+                stream_queue.put(None) 
+            else:
+                agent_answer = result.get("data", "")
             
             return {
                 "result": result,
@@ -132,6 +167,9 @@ class SupervisorGraph:
             }
             
         except Exception as e:
+            if stream_mode and stream_queue:
+                stream_queue.put(json.dumps({"error": str(e)}))
+                stream_queue.put(None)
             return {"error": str(e)}
 
     def _anonymize_recursive(self, data, current_key=None):
@@ -161,11 +199,8 @@ class SupervisorGraph:
             return {}
 
         agent_result = state["result"]
-        stream_mode = state.get("stream_mode", False)
 
-        # In streaming mode, data is a generator, so we cannot anonymize it here
-        # without consuming the generator and breaking the stream.
-        if not stream_mode and "data" in agent_result:
+        if "data" in agent_result and isinstance(agent_result["data"], str):
             agent_result["data"] = self._anonymize_recursive(agent_result["data"])
 
         if "context" in agent_result:
@@ -202,7 +237,9 @@ class SupervisorGraph:
         return self.graph.invoke(inputs, config=config)
 
     def stream_run(self, user_question: str, session_id: str = "default_session") -> Generator[str, None, None]:
-        """Public entry point to execute the graph and stream the LLM response."""
+        """Public entry point using Producer-Consumer + ContextVars for perfect streaming telemetry."""
+        q = queue.Queue()
+        
         config = {"configurable": {"thread_id": session_id}}
 
         inputs = {
@@ -212,44 +249,27 @@ class SupervisorGraph:
             "stream_mode": True
         }
 
-        # We need to manually execute the graph nodes to intercept the generator
-        try:
-            # Run Router
-            router_output = self.router_node(inputs)
-            if "error" in router_output:
-                yield json.dumps({"error": router_output["error"]})
-                return
+        # Inject the queue into the ContextVar tunnel
+        stream_queue_var.set(q)
+
+        def worker():
+            """Runs LangGraph execution in a background thread."""
+            try:
+                self.graph.invoke(inputs, config=config)
+            except Exception as e:
+                q.put(json.dumps({"error": f"Graph execution failed: {str(e)}"}))
+                q.put(None)
+
+        # Clone the context to ensure the background thread inherits the stream_queue_var
+        ctx = contextvars.copy_context()
+        thread = threading.Thread(target=ctx.run, args=(worker,))
+        thread.start()
+
+        # The main thread waits here and yields items to FastAPI as soon as the worker pushes them
+        while True:
+            item = q.get()
+            if item is None:
+                break
+            yield item
             
-            inputs.update(router_output)
-
-            # Run Executor
-            executor_output = self.execution_node(inputs)
-            if "error" in executor_output:
-                yield json.dumps({"error": executor_output["error"]})
-                return
-
-            result = executor_output["result"]
-            generator = result.get("data")
-            
-            # Anonymize context before sending it
-            anonymized_context = self._anonymize_recursive(result.get("context", []))
-            
-            # Send initial metadata (routed DB and context)
-            yield json.dumps({
-                "type": "metadata",
-                "routed_db": inputs.get("selected_db"),
-                "context": anonymized_context
-            }) + "\n"
-
-            # Stream the LLM tokens
-            full_response = ""
-            if generator:
-                for chunk in generator:
-                    full_response += chunk
-                    yield json.dumps({"type": "chunk", "content": chunk}) + "\n"
-
-            # Redis
-            self.graph.update_state(config, {"history": [f"Agent answered: {full_response}"]})
-
-        except Exception as e:
-            yield json.dumps({"error": f"Streaming failed: {str(e)}"})
+        thread.join()
