@@ -9,8 +9,22 @@ from langchain_chroma import Chroma
 class VectorEngine:
     """Manages ChromaDB interactions: semantic search and document ingestion."""
 
+    # Class-level variables to hold the Singleton instance
+    _instance = None
+    _initialized = False
+
+    def __new__(cls, *args, **kwargs):
+        """Singleton Pattern: Ensures only one instance of VectorEngine exists in memory."""
+        if not cls._instance:
+            cls._instance = super(VectorEngine, cls).__new__(cls, *args, **kwargs)
+        return cls._instance
+
     def __init__(self):
         """Initializes the connection to ChromaDB and loads the heavy embedding model."""
+        # Prevent re-initialization if the Singleton is already set up
+        if self._initialized:
+            return
+
         host_url = os.getenv("CHROMADB_HOST", "http://host.docker.internal:8000")
         
         # Parse URL safely to extract hostname and port
@@ -31,6 +45,8 @@ class VectorEngine:
             api_key=os.getenv("AZURE_OPENAI_API_KEY"),
             check_embedding_ctx_length=False
         )
+        
+        self._initialized = True
 
 
     def _get_collection(self, collection_name: str) -> Chroma:

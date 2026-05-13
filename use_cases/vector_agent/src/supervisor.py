@@ -16,6 +16,8 @@ from presidio_analyzer.nlp_engine import NlpEngineProvider
 from llm_interfaces.factory import LLMFactory
 from use_cases.vector_agent.src.rag_agent import RAGAgent
 
+# ContextVar creates a secure, thread-local tunnel to pass the queue to the LangGraph worker 
+# without breaking LangGraph's strict state schema requirements.
 stream_queue_var = contextvars.ContextVar("stream_queue", default=None)
 
 # Constants for anonymization to prevent reallocation in recursive calls
@@ -118,6 +120,7 @@ class SupervisorGraph:
         question = state["question"]
         stream_mode = state.get("stream_mode", False)
         
+        # Extract the queue from the invisible tunnel established by the main thread
         stream_queue = stream_queue_var.get()
 
         history_text = "\n".join(state.get("history", []))
@@ -136,6 +139,7 @@ class SupervisorGraph:
                 generator = result.get("data")
                 anonymized_context = self._anonymize_recursive(result.get("context", []))
                 
+                # Push the metadata first so the frontend can render sources immediately
                 stream_queue.put(json.dumps({
                     "type": "metadata",
                     "routed_db": selected_db,
@@ -143,12 +147,16 @@ class SupervisorGraph:
                 }) + "\n")
                 
                 if generator:
+                    # We iterate over the generator here inside the node. 
+                    # This keeps the OpenTelemetry span active until the last token is generated.
                     for chunk in generator:
                         agent_answer += chunk
                         stream_queue.put(json.dumps({"type": "chunk", "content": chunk}) + "\n")
                 
+                # Replace the generator object with a plain string so Redis can serialize it without crashing
                 result["data"] = agent_answer
                 
+                # Notifies FastAPI that generation is complete
                 stream_queue.put(None) 
             else:
                 agent_answer = result.get("data", "")
@@ -191,11 +199,8 @@ class SupervisorGraph:
             return {}
 
         agent_result = state["result"]
-        stream_mode = state.get("stream_mode", False)
 
-        # In streaming mode, data is a generator, so we cannot anonymize it here
-        # without consuming the generator and breaking the stream.
-        if not stream_mode and "data" in agent_result:
+        if "data" in agent_result and isinstance(agent_result["data"], str):
             agent_result["data"] = self._anonymize_recursive(agent_result["data"])
 
         if "context" in agent_result:
@@ -244,19 +249,23 @@ class SupervisorGraph:
             "stream_mode": True
         }
 
+        # Inject the queue into the ContextVar tunnel
         stream_queue_var.set(q)
 
         def worker():
+            """Runs LangGraph execution in a background thread."""
             try:
                 self.graph.invoke(inputs, config=config)
             except Exception as e:
                 q.put(json.dumps({"error": f"Graph execution failed: {str(e)}"}))
                 q.put(None)
 
+        # Clone the context to ensure the background thread inherits the stream_queue_var
         ctx = contextvars.copy_context()
         thread = threading.Thread(target=ctx.run, args=(worker,))
         thread.start()
 
+        # The main thread waits here and yields items to FastAPI as soon as the worker pushes them
         while True:
             item = q.get()
             if item is None:

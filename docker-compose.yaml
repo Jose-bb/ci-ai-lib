@@ -38,6 +38,8 @@ services:
       - "8002:8000"
     env_file:
       - .env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       - LLM_PROVIDER=${LLM_PROVIDER:-azure_openai}
       - AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY}

@@ -34,11 +34,14 @@ class RAGAgent:
         """Retrieves context, injects it into the prompt, and generates an LLM answer."""
         collection_name = self.config.get("collection_name", self.collection_id)
         
+        # Allow the YAML config to dictate the number of chunks to retrieve, default to 4 if missing
+        top_k = self.config.get("top_k", 4)
+        
         # Retrieve Context
         search_results = self.vector_engine.search_similarity(
             query=user_question, 
             collection_name=collection_name, 
-            k=4
+            k=top_k
         )
 
         if isinstance(search_results, str):
@@ -53,7 +56,7 @@ class RAGAgent:
         if "{context}" in raw_system_prompt:
             formatted_system_prompt = raw_system_prompt.replace("{context}", formatted_context)
         else:
-            # Fallback if {context} placeholder is missing in YAML
+            # Fallback if {context} placeholder is accidentally omitted in the YAML config
             formatted_system_prompt = f"{raw_system_prompt}\n\nRETRIEVED CONTEXT:\n{formatted_context}"
         
         # Generate Answer
@@ -64,10 +67,10 @@ class RAGAgent:
 
         # Choose execution mode
         if stream:
-            # Returns a Python Generator that yields chunks
+            # Returns a Python Generator that yields chunks (consumed by the background worker thread)
             generated_answer = self.llm.invoke_stream(messages=messages, model=self.model_name)
         else:
-            # Returns the full string immediately
+            # Returns the full string immediately (standard blocking execution)
             generated_answer = self.llm.invoke(messages=messages, model=self.model_name)
 
         return {

@@ -7,7 +7,7 @@ url = "http://localhost:8002/ask-rag-stream"
 # The default question assumes a Pokémon manual PDF was ingested, which is not included in this repo.
 payload = {
     "question": "Actúa como el Profesor Oak. Analiza en extremo detalle a Pikachu, Raichu y Nidoran. Escribe un texto muy largo, de al menos 3 párrafos, comparando sus descripciones físicas, tipos, pesos y alturas basándote en el manual. Explayate mucho en la narrativa.",
-    "session_id": "long_session_2"
+    "session_id": "demo_stream_session_1"
 }
 
 print("Connecting to the RAG Agent (Streaming Mode)...\n")

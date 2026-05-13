@@ -11,11 +11,11 @@ from openinference.instrumentation.langchain import LangChainInstrumentor
 
 load_dotenv()
 
-# Telemetry & Observability Setup (Arize Phoenix)
+# Telemetry must be initialized before creating the FastAPI app to capture all traces
 tracer_provider = register()
 LangChainInstrumentor().instrument(tracer_provider=tracer_provider)
 
-# Ensure the root directory is in the path (fallback if PYTHONPATH is missing)
+# Ensure the root directory is in the path to allow absolute imports
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..'))
 if ROOT_DIR not in sys.path:
     sys.path.append(ROOT_DIR)
@@ -24,7 +24,7 @@ from use_cases.vector_agent.src.supervisor import SupervisorGraph
 
 app = FastAPI(title="Vector RAG Agent API", version="3.0.0")
 
-# Initialize the supervisor
+# Initialize the supervisor globally so it loads the catalog and Redis connection only once at startup
 CONFIG_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../config/prompts.yaml'))
 supervisor = SupervisorGraph(config_path=CONFIG_PATH)
 
@@ -44,7 +44,7 @@ class QueryResponse(BaseModel):
 
 
 @app.post("/ask-rag", response_model=QueryResponse)
-async def ask_rag(request: QueryRequest):
+def ask_rag(request: QueryRequest):
     """Routes the natural language question through the RAG workflow (Standard/Blocking)."""
     try:
         state = supervisor.run(user_question=request.question, session_id=request.session_id)
@@ -68,7 +68,7 @@ async def ask_rag(request: QueryRequest):
 
 
 @app.post("/ask-rag-stream")
-async def ask_rag_stream(request: QueryRequest):
+def ask_rag_stream(request: QueryRequest):
     """Routes the question and streams the response back token by token (Server-Sent Events)."""
     try:
         generator = supervisor.stream_run(
@@ -83,6 +83,6 @@ async def ask_rag_stream(request: QueryRequest):
 
 
 @app.get("/health")
-async def health():
+def health():
     """Health check for the API."""
     return {"status": "ok", "agent": "Vector RAG Supervisor up and running"}

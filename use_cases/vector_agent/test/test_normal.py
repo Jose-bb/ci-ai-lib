@@ -6,7 +6,7 @@ url = "http://localhost:8002/ask-rag"
 # The default question assumes a Pokémon manual PDF was ingested, which is not included in this repo.
 payload = {
     "question": "Actúa como el Profesor Oak. Analiza en extremo detalle a Pikachu, Raichu y Nidoran. Escribe un texto muy largo, de al menos 3 párrafos, comparando sus descripciones físicas, tipos, pesos y alturas basándote en el manual. Explayate mucho en la narrativa.",
-    "session_id": "long_session_2"
+    "session_id": "demo_normal_session_1"
 }
 
 print("Connecting to the RAG Agent (Classic Mode)...\n")
@@ -21,10 +21,12 @@ try:
     
     print("-" * 50)
     
-    # New error handling logic
+    # Error handling
     if "error" in data and data["error"]:
         print(f"[CAPTURED SERVER ERROR]: {data['error']}")
     else:
+        # Routing visibility
+        print(f"[ROUTED DB]: {data.get('routed_db', 'Unknown')}\n") 
         print(data.get("data", "Error in the response"))
 
 except Exception as e:
