@@ -16,17 +16,19 @@ class ConfirmationResponse(BaseModel):
     )
 
 @server.tool()
-async def restart_cluster(cluster_name: str, ctx: Context) -> str:
+async def deploy_pytorch_model(model_name: str, target_environment: str, ctx: Context) -> str:
     """
-    Simulates restarting a critical infrastructure cluster.
+    Simulates deploying a serialized PyTorch model to a target environment.
     Requires explicit human confirmation via elicitation before proceeding.
     
     Args:
-        cluster_name: The name of the cluster to restart.
+        model_name: The name of the PyTorch model to deploy.
+        target_environment: The environment (e.g., 'production', 'staging').
         ctx: The FastMCP Context object used to trigger elicitation.
     """
     elicitation_message = (
-        f"CRITICAL ACTION: The system is attempting to restart the cluster '{cluster_name}'. "
+        f"DEPLOYMENT AUTHORIZATION: The agent is attempting to deploy the PyTorch model "
+        f"'{model_name}' to the '{target_environment}' environment. "
         f"Do you explicitly approve this action?"
     )
     
@@ -38,8 +40,9 @@ async def restart_cluster(cluster_name: str, ctx: Context) -> str:
     
     # Handle the user's response
     if not user_input:
-        return f"Operation aborted: User declined or cancelled the elicitation request for '{cluster_name}'."
-
+        return f"Operation aborted: User cancelled the deployment of '{model_name}'."
+    
+    # Safely extract the Pydantic model from the AcceptedElicitation wrapper
     if hasattr(user_input, 'content'):
         response_data = user_input.content
     elif hasattr(user_input, 'data'):
@@ -47,12 +50,12 @@ async def restart_cluster(cluster_name: str, ctx: Context) -> str:
     else:
         print(f"\n[SERVER DEBUG] Unknown wrapper structure. Attributes: {dir(user_input)}\n")
         return f"Internal Error: Could not extract payload from {type(user_input).__name__}."
-        
+    
     # Now we safely use the extracted Pydantic model
     if not response_data.is_confirmed:
-        return f"Operation blocked: User explicitly denied the restart. Reason: {response_data.reason}"
+        return f"Operation blocked: User denied the deployment. Reason: {response_data.reason}"
         
-    return f"Success: Cluster '{cluster_name}' is restarting. User authorization reason: {response_data.reason}"
+    return f"Success: PyTorch model '{model_name}' is successfully deploying to '{target_environment}'. User authorization reason: {response_data.reason}"
 
 if __name__ == "__main__":
     server.run()

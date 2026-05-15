@@ -1,4 +1,9 @@
 # --- Base & API ---
-fastmcp>=0.1.0
+fastmcp==3.2.4
 pydantic==2.13.3
 python-dotenv==1.2.2
+
+# --- LLM & Orchestration ---
+openai==2.33.0
+langgraph==1.1.10
+langchain-openai==1.2.1
