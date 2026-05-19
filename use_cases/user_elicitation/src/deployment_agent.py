@@ -48,8 +48,9 @@ async def main():
         temperature=0
     )
 
-    # Initialize the FastMCP Client
-    server_script_path = "use_cases/user_elicitation/src/server.py"
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    server_script_path = os.path.join(current_dir, "server.py")
+    
     mcp_client = Client(
         server_script_path,
         elicitation_handler=my_elicitation_handler

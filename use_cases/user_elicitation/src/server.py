@@ -1,8 +1,12 @@
 import os
 import shutil
 import psutil
+import asyncio
+from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 from fastmcp import FastMCP, Context
+
+load_dotenv()
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 BASE_USE_CASE_DIR = os.path.join(CURRENT_DIR, "..")
@@ -29,7 +33,10 @@ class ConfirmationResponse(BaseModel):
 @server.tool()
 async def get_environment_health(environment: str) -> str:
     """Checks the REAL health and metrics of the machine running the server."""
-    cpu_usage = psutil.cpu_percent(interval=1)
+    psutil.cpu_percent(interval=None)
+    await asyncio.sleep(1)
+    cpu_usage = psutil.cpu_percent(interval=None)
+    
     memory_info = psutil.virtual_memory()
     mem_usage = memory_info.percent
     

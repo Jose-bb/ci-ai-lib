@@ -52,7 +52,7 @@ async def test_elicitation_handler_blocks_deployment(mock_input):
 
 
 @pytest.mark.asyncio
-@patch('builtins.input', side_effect=['invalid_word'])
+@patch('builtins.input', side_effect=['invalid_word', ''])
 async def test_elicitation_handler_invalid_input(mock_input):
     """Test 3: Verifies that an unrecognized input cancels the operation directly."""
     result = await my_elicitation_handler(
@@ -70,10 +70,7 @@ async def test_elicitation_handler_invalid_input(mock_input):
 @patch('use_cases.user_elicitation.src.deployment_agent.AzureChatOpenAI')
 @patch('builtins.input', side_effect=['quit'])
 async def test_agent_graceful_exit(mock_input, mock_llm_class):
-    """
-    Test 4: Verifies the CLI exits gracefully on the 'quit' command.
-    We mock AzureChatOpenAI to prevent real API calls and ensure the test runs instantly.
-    """
+    """Test 4: Verifies the CLI exits gracefully on the 'quit' command."""
     # Await the main function; it should start, read 'quit', and break the while loop
     await main()
     
