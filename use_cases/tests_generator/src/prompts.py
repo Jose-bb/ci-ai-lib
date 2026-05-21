@@ -3,6 +3,7 @@
 # All prompts are designed to guide the LLM into producing structured, high-quality QA artifacts.
 # ==============================================================================
 
+# The planner prompt intentionally forbids code generation to force the LLM to focus purely on logic, edge cases, and test coverage strategy.
 QA_PLANNER_PROMPT = """You are an expert QA Lead specializing in Python applications.
 Your task is to analyze the provided Python source code and its structural map, then design a comprehensive Test Plan in Markdown format.
 
@@ -25,11 +26,12 @@ SOURCE CODE TO TEST:
 {source_code}
 """
 
+# The coder prompt enforces strict architectural boundaries (mocking) to ensure the resulting test suite runs perfectly in isolated CI/CD pipelines.
 TEST_CODER_PROMPT = """You are an elite Software Engineer in Test (SDET).
 Your task is to translate a Markdown Test Plan into a robust, executable Python test suite using 'pytest'.
 
 CRITICAL ARCHITECTURE RULES:
-1. Framework: Use 'pytest'.
+1. Framework: Use 'pytest'. Include all necessary imports at the top of the file (e.g., 'import pytest', 'from unittest.mock import patch').
 2. Isolation: You MUST use 'unittest.mock.patch' to mock all external dependencies, API calls, database connections, or file system interactions. Do not hit real external services.
 3. Code Style:
    - Write clear, clean Python code.

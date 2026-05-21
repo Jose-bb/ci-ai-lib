@@ -20,6 +20,7 @@ class CodeParser:
                             If a syntax error occurs, returns a dictionary with the 'error' key.
         """
         try:
+            # Analyze the code without running it
             tree = ast.parse(source_code)
         except SyntaxError as e:
             return {"error": f"Failed to parse source code. Syntax error: {str(e)}"}
@@ -29,19 +30,18 @@ class CodeParser:
             "standalone_functions": []
         }
 
-        # Iterate only through the top-level nodes to cleanly separate class methods from standalone functions
+        # Iterate only through top-level nodes to cleanly separate class boundaries from global functions
         for node in tree.body:
             if isinstance(node, ast.ClassDef):
-                # Extract all methods inside the class
-                methods = [n.name for n in node.body if isinstance(n, ast.FunctionDef)]
+                # We check for both standard and async functions to ensure full coverage
+                methods = [n.name for n in node.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
                 
                 structure["classes"][node.name] = {
                     "methods": methods,
                     "has_docstring": ast.get_docstring(node) is not None
                 }
                 
-            elif isinstance(node, ast.FunctionDef):
-                # Extract top-level functions
+            elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 structure["standalone_functions"].append({
                     "name": node.name,
                     "has_docstring": ast.get_docstring(node) is not None
