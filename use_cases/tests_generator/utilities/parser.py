@@ -4,47 +4,57 @@ from typing import Dict, Any
 class CodeParser:
     """
     Utility class to parse Python source code and extract its structure.
-    This provides the LLM with a clear map of what needs to be tested.
+    This provides the LLM with a clear map of what needs to be tested across an entire project.
     """
 
     @staticmethod
-    def extract_structure(source_code: str) -> Dict[str, Any]:
+    def extract_project_structure(project_files: Dict[str, str]) -> Dict[str, Any]:
         """
-        Parses a raw string of Python code and extracts classes, methods, and top-level functions.
+        Parses multiple Python files and extracts classes, methods, and top-level functions for each.
         
         Args:
-            source_code (str): The raw Python code received from the API endpoint.
+            project_files (Dict[str, str]): Dictionary mapping file paths to their raw source code.
             
         Returns:
-            Dict[str, Any]: A dictionary containing the structural metadata of the code.
-                            If a syntax error occurs, returns a dictionary with the 'error' key.
+            Dict[str, Any]: A nested dictionary containing the structural metadata of the entire project.
+                            If a syntax error occurs in ANY file, returns a dictionary with the 'error' key.
         """
-        try:
-            # Analyze the code without running it
-            tree = ast.parse(source_code)
-        except SyntaxError as e:
-            return {"error": f"Failed to parse source code. Syntax error: {str(e)}"}
+        project_structure = {}
 
-        structure = {
-            "classes": {},
-            "standalone_functions": []
-        }
+        for file_path, source_code in project_files.items():
+            try:
+                # Analyze the code safely without executing it
+                tree = ast.parse(source_code)
+            except SyntaxError as e:
+                # Fail-fast: If one file is broken, we abort and report exactly which file failed
+                return {"error": f"Failed to parse '{file_path}'. Syntax error: {str(e)}"}
 
-        # Iterate only through top-level nodes to cleanly separate class boundaries from global functions
-        for node in tree.body:
-            if isinstance(node, ast.ClassDef):
-                # We check for both standard and async functions to ensure full coverage
-                methods = [n.name for n in node.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
-                
-                structure["classes"][node.name] = {
-                    "methods": methods,
-                    "has_docstring": ast.get_docstring(node) is not None
-                }
-                
-            elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                structure["standalone_functions"].append({
-                    "name": node.name,
-                    "has_docstring": ast.get_docstring(node) is not None
-                })
+            file_structure = {
+                "classes": {},
+                "standalone_functions": []
+            }
 
-        return structure
+            # Iterate through top-level nodes for the current file
+            for node in tree.body:
+                if isinstance(node, ast.ClassDef):
+                    # Check for both standard and async functions
+                    methods = [
+                        n.name for n in node.body 
+                        if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+                    ]
+                    
+                    file_structure["classes"][node.name] = {
+                        "methods": methods,
+                        "has_docstring": ast.get_docstring(node) is not None
+                    }
+                    
+                elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    file_structure["standalone_functions"].append({
+                        "name": node.name,
+                        "has_docstring": ast.get_docstring(node) is not None
+                    })
+
+            # Append this file's structure to the global project map
+            project_structure[file_path] = file_structure
+
+        return project_structure
