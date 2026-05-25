@@ -2,6 +2,11 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# Install system dependencies (Git)
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends git && \
+    rm -rf /var/lib/apt/lists/*
+
 # Copy the specific requirements for the tests generator
 COPY use_cases/tests_generator/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
