@@ -3,6 +3,7 @@ fastapi==0.136.1
 uvicorn==0.46.0
 pydantic==2.13.3
 python-dotenv==1.2.2
+python-multipart==0.0.29
 
 # --- LLM & Orchestration ---
 openai==2.33.0
