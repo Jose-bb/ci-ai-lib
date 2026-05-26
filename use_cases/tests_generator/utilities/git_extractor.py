@@ -6,8 +6,7 @@ from typing import Dict
 class GitExtractor:
     """
     Utility class to handle cloning and extracting context from Git repositories.
-    Filters out non-essential files to keep the LLM context clean, while pulling
-    both Python code and project metadata.
+    Filters out non-essential files to keep the LLM context clean, while pulling both Python code and project metadata.
     """
 
     # Directories to ignore during extraction to save tokens
@@ -76,5 +75,4 @@ class GitExtractor:
                         # Skip binary files or unrecognized encodings
                         continue
 
-        # The temporary directory (and all its contents) is automatically deleted as soon as the execution exits the 'with' block.
         return extracted_files
