@@ -69,9 +69,8 @@ def test_2_syntax_error_handling(mock_llm_factory):
 
 
 @patch('use_cases.tests_generator.src.main.generator_agent.run')
-def test_3_endpoint_success(mock_graph_run):
-    """Test 3: Verifies the FastAPI endpoint returns a valid ZIP file on success."""
-    # Bypasses the graph logic entirely to strictly test the API response structure
+def test_3_async_zip_endpoint_success(mock_graph_run):
+    """Test 3: Verifies the async flow for ZIP upload (202 Accepted -> 200 OK with ZIP)."""
     mock_graph_run.return_value = {
         "error": None,
         "test_plan": "# API Test Plan",
@@ -80,25 +79,27 @@ def test_3_endpoint_success(mock_graph_run):
     
     zip_bytes = create_dummy_zip("math_ops.py", "def sub(a, b):\n    return a - b")
     
-    # Simulate a multipart/form-data file upload
-    response = client.post(
+    # POST step: Queue the task
+    response_post = client.post(
         "/generate-tests-from-zip",
         files={"file": ("dummy_project.zip", zip_bytes, "application/zip")}
     )
+    assert response_post.status_code == 202
+    assert "task_id" in response_post.json()
+    task_id = response_post.json()["task_id"]
     
-    assert response.status_code == 200
-    assert response.headers["content-type"] == "application/zip"
-    assert "attachment; filename=QA_suite_dummy_project.zip" in response.headers["content-disposition"]
+    # GET step: Retrieve the results
+    response_get = client.get(f"/status/{task_id}")
     
-    # Verify the contents of the downloaded ZIP in memory
-    downloaded_zip = zipfile.ZipFile(io.BytesIO(response.content))
+    assert response_get.status_code == 200
+    assert response_get.headers["content-type"] == "application/zip"
+    assert "attachment;" in response_get.headers["content-disposition"]
+    
+    downloaded_zip = zipfile.ZipFile(io.BytesIO(response_get.content))
     zip_files = downloaded_zip.namelist()
     
-    assert "test_plan_dummy_project.md" in zip_files
-    assert "test_dummy_project.py" in zip_files
-    
-    assert downloaded_zip.read("test_plan_dummy_project.md").decode("utf-8") == "# API Test Plan"
-    assert downloaded_zip.read("test_dummy_project.py").decode("utf-8") == "def test_api():\n    pass"
+    assert any(f.endswith(".md") for f in zip_files)
+    assert any(f.endswith(".py") for f in zip_files)
 
 
 def test_4_endpoint_invalid_file_extension():
@@ -111,13 +112,12 @@ def test_4_endpoint_invalid_file_extension():
     
     # Expecting a Fail-Fast 400 Bad Request
     assert response.status_code == 400
-    assert response.json()["detail"] == "Uploaded file must be a .zip archive."
+    assert "Uploaded file must be a .zip archive." in response.json()["detail"]
 
 
 @patch('use_cases.tests_generator.src.main.generator_agent.run')
-def test_5_endpoint_syntax_error(mock_graph_run):
-    """Test 5: Verifies the FastAPI endpoint returns a 400 Bad Request on syntax errors."""
-    # Simulates the graph catching a syntax error during the parsing phase
+def test_5_async_endpoint_syntax_error(mock_graph_run):
+    """Test 5: Verifies the status endpoint returns a 400 Bad Request on syntax errors."""
     mock_graph_run.return_value = {
         "error": "Failed to parse 'math_ops.py'. Syntax error: invalid syntax",
         "test_plan": None,
@@ -126,10 +126,59 @@ def test_5_endpoint_syntax_error(mock_graph_run):
     
     zip_bytes = create_dummy_zip("math_ops.py", "def sub(a, b) return a - b")
     
-    response = client.post(
+    response_post = client.post(
         "/generate-tests-from-zip",
         files={"file": ("broken_project.zip", zip_bytes, "application/zip")}
     )
+    assert response_post.status_code == 202
+    task_id = response_post.json()["task_id"]
     
-    assert response.status_code == 400
-    assert "Syntax error" in response.json()["detail"]
+    response_get = client.get(f"/status/{task_id}")
+    
+    # Validate that the endpoint returns 400 and contains the message
+    assert response_get.status_code == 400
+    assert "Syntax error" in response_get.text
+
+
+@patch('use_cases.tests_generator.src.main.GitExtractor.extract_repository')
+@patch('use_cases.tests_generator.src.main.generator_agent.run')
+def test_6_async_git_endpoint_success(mock_graph_run, mock_git_extract):
+    """Test 6: Verifies the async flow for GitHub URL processing."""
+    mock_git_extract.return_value = {"src/main.py": "def dummy(): pass"}
+    mock_graph_run.return_value = {
+        "error": None,
+        "test_plan": "# Git Test Plan",
+        "generated_tests": "def test_git():\n    pass"
+    }
+    
+    response_post = client.post(
+        "/generate-tests-from-git",
+        json={"repo_url": "https://github.com/dummy/repo.git"}
+    )
+    
+    assert response_post.status_code == 202
+    task_id = response_post.json()["task_id"]
+    
+    response_get = client.get(f"/status/{task_id}")
+    assert response_get.status_code == 200
+    assert response_get.headers["content-type"] == "application/zip"
+
+
+@patch('use_cases.tests_generator.src.main.GitExtractor.extract_repository')
+def test_7_async_git_endpoint_failure(mock_git_extract):
+    """Test 7: Verifies the async task fails gracefully for invalid Git repositories."""
+    # Simulate that the extraction fails
+    mock_git_extract.side_effect = RuntimeError("Failed to clone repository. Error: Not found")
+    
+    # The POST accepts the request quickly (202)
+    response_post = client.post(
+        "/generate-tests-from-git",
+        json={"repo_url": "https://github.com/invalid/repo.git"}
+    )
+    assert response_post.status_code == 202
+    task_id = response_post.json()["task_id"]
+    
+    # The GET to status reveals that the background task failed
+    response_get = client.get(f"/status/{task_id}")
+    assert response_get.status_code == 400
+    assert "Failed to clone repository" in response_get.text

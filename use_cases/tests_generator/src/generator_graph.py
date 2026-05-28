@@ -1,5 +1,5 @@
 import os
-from typing import TypedDict, Optional, Dict, Any
+from typing import TypedDict, Optional, Dict, Any, Callable
 from langgraph.graph import StateGraph, START, END
 
 from llm_interfaces.factory import LLMFactory
@@ -13,9 +13,11 @@ class GraphState(TypedDict):
     test_plan: Optional[str]
     generated_tests: Optional[str]
     error: Optional[str]
+    # Optional callback to report progress (percentage, message)
+    progress_callback: Optional[Callable[[int, str], None]]
 
 class QAGeneratorGraph:
-    """Encapsulates the LangGraph architecture for the Tests Generator (V2)."""
+    """Encapsulates the LangGraph architecture for the Tests Generator (V3)."""
 
     def __init__(self, provider: str = "azure_openai"):
         self.llm = LLMFactory.get_llm(provider)
@@ -25,13 +27,18 @@ class QAGeneratorGraph:
 
     def parser_node(self, state: GraphState) -> dict:
         """Extracts the AST structure from all project files."""
+        cb = state.get("progress_callback")
+        if cb: cb(15, "Extracting the structure and validating the syntax of the code...")
+
         files = state["project_files"]
         structure = CodeParser.extract_project_structure(files)
         
         # Capture critical syntax errors early to prevent downstream LLM hallucinations
         if "error" in structure:
+            if cb: cb(100, "Error detected. Process aborted.")
             return {"error": structure["error"]}
             
+        if cb: cb(25, "Syntax validated. Preparing the context...")
         return {"code_structure": structure}
 
 
@@ -39,6 +46,9 @@ class QAGeneratorGraph:
         """Drafts the Global Test Plan in Markdown based on the project structure."""
         if state.get("error"):
             return {}
+
+        cb = state.get("progress_callback")
+        if cb: cb(30, "AI planning the QA strategy (Generating Markdown)...")
 
         # Convert dictionary of files to a readable string format for the LLM context
         project_context = "\n".join(
@@ -56,6 +66,8 @@ class QAGeneratorGraph:
         ]
         
         response = self.llm.invoke(messages=messages, model=self.model_name)
+        
+        if cb: cb(50, "QA plan generated. Starting to write code...")
         return {"test_plan": response.strip()}
 
 
@@ -63,6 +75,9 @@ class QAGeneratorGraph:
         """Generates the global pytest executable code based on the Test Plan."""
         if state.get("error"):
             return {}
+
+        cb = state.get("progress_callback")
+        if cb: cb(60, "AI isolating dependencies and setting up the Pytest suite...")
 
         project_context = "\n".join(
             [f"--- File: {path} ---\n{code}\n" for path, code in state["project_files"].items()]
@@ -83,6 +98,7 @@ class QAGeneratorGraph:
         # Strip markdown boundaries to ensure the payload is pure, executable Python code
         cleaned_code = response.replace("```python", "").replace("```", "").strip()
         
+        if cb: cb(90, "Code generated successfully. Packaging results...")
         return {"generated_tests": cleaned_code}
 
 
@@ -111,15 +127,23 @@ class QAGeneratorGraph:
         
         return builder.compile()
 
-
-    def run(self, project_files: Dict[str, str]) -> dict:
+    def run(self, project_files: Dict[str, str], progress_callback: Optional[Callable[[int, str], None]] = None) -> dict:
         """Entry point to execute the graph."""
+        if progress_callback:
+            progress_callback(10, "Initialising LangGraph and preparing files...")
+
         inputs = {
             "project_files": project_files,
             "code_structure": None,
             "test_plan": None,
             "generated_tests": None,
-            "error": None
+            "error": None,
+            "progress_callback": progress_callback
         }
         
-        return self.graph.invoke(inputs)
+        result = self.graph.invoke(inputs)
+        
+        if progress_callback and not result.get("error"):
+            progress_callback(100, "Process completed successfully!")
+            
+        return result

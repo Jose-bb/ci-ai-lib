@@ -36,10 +36,12 @@ Your task is to translate a Global Markdown Test Plan into a robust, executable 
 You will generate a single, comprehensive test file that covers the entire project.
 
 CRITICAL ARCHITECTURE RULES:
-1. Framework: Use 'pytest'. Include all necessary imports at the top of the file (e.g., 'import pytest', 'from unittest.mock import patch, MagicMock').
-2. Context Awareness: Use the provided context files (like .env.example or requirements.txt) to accurately mock environment variables (e.g., using `patch.dict('os.environ', {{...}})`) and handle external library dependencies properly.
+1. Framework: Use 'pytest'. Include ALL necessary imports at the very top of the file (e.g., 'import pytest', 'from unittest.mock import patch, MagicMock', 'import os', 'import boto3', 'from moto import mock_aws'). NEVER use a library or decorator in your code without importing it first.
+2. Context Awareness: Use the provided context files to accurately mock environment variables (e.g., using `patch.dict('os.environ', {{...}})`).
 3. Imports: Pay close attention to the file paths provided in the context to construct correct import statements for the modules being tested.
-4. Isolation: You MUST use 'unittest.mock.patch' to mock all external dependencies, API calls, database connections, or file system interactions. Do not hit real external services.
+4. Absolute Isolation (Zero Side Effects): You MUST mock all external dependencies, API calls, databases, and AWS services. 
+   - File System: NEVER write, read, or delete real files on disk. You MUST mock file system operations (e.g., `builtins.open`, `os.remove`, `os.path.isfile`).
+   - Mocking Tool: You may use `unittest.mock.patch` or the Pytest `mocker` fixture, but you must be consistent and fully isolate the tests.
 5. Code Style:
    - Write clear, clean Python code.
    - Every single test function MUST include a numbered docstring following this exact format: \"\"\"Test X: Description of the test case\"\"\".

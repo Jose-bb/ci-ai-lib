@@ -1,13 +1,11 @@
 import os
 import io
+import uuid
 import zipfile
 from urllib.parse import urlparse
-from fastapi import FastAPI, HTTPException, UploadFile, File
-from fastapi.responses import Response
+from fastapi import FastAPI, HTTPException, UploadFile, File, BackgroundTasks
+from fastapi.responses import Response, JSONResponse
 from pydantic import BaseModel, HttpUrl
-import langchain
-
-langchain.debug = True
 
 from use_cases.tests_generator.src.generator_graph import QAGeneratorGraph
 from use_cases.tests_generator.utilities.zip_extractor import ZipExtractor
@@ -15,126 +13,169 @@ from use_cases.tests_generator.utilities.git_extractor import GitExtractor
 
 app = FastAPI(title="Tests Generator API (V3)", version="3.0.0")
 
-# Initialize the LangGraph globally to prevent compilation overhead
+# Initialize LangGraph globally to prevent compilation overhead
 generator_agent = QAGeneratorGraph()
 
-# Pydantic model for the new Git endpoint payload
+# In-memory store for background tasks
+tasks_store = {}
+
 class GitGenerationRequest(BaseModel):
     repo_url: HttpUrl
 
+def create_progress_callback(task_id: str):
+    """
+    Creates a callback function tied to a specific task_id.
+    This will be passed into LangGraph to update the global state.
+    """
+    def callback(progress: int, message: str):
+        if task_id in tasks_store:
+            tasks_store[task_id]["progress"] = progress
+            tasks_store[task_id]["message"] = message
+    return callback
+
+
+def generate_qa_artifacts(task_id: str, project_files: dict, project_base_name: str, callback=None):
+    """Worker to run LangGraph and build the ZIP file in the background."""
+    # Ensure we have a callback, either passed from the Git worker or created fresh for ZIPs
+    if not callback:
+        callback = create_progress_callback(task_id)
+
+    try:
+        # Trigger the LangGraph execution pipeline, passing the progress callback
+        result_state = generator_agent.run(
+            project_files=project_files, 
+            progress_callback=callback
+        )
+        
+        if result_state.get("error"):
+            tasks_store[task_id] = {"status": "failed", "error": result_state["error"]}
+            return
+
+        callback(95, "Packaging files into ZIP archive...")
+
+        # Create the output ZIP file in memory
+        memory_zip = io.BytesIO()
+        with zipfile.ZipFile(memory_zip, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr(f"test_plan_{project_base_name}.md", result_state.get("test_plan", ""))
+            zf.writestr(f"test_{project_base_name}.py", result_state.get("generated_tests", ""))
+        
+        # Save result in memory and mark as completed
+        tasks_store[task_id] = {
+            "status": "completed",
+            "progress": 100,
+            "message": "Process completed! File ready for download.",
+            "file_bytes": memory_zip.getvalue(),
+            "filename": f"QA_suite_{project_base_name}.zip"
+        }
+        
+    except Exception as e:
+        tasks_store[task_id] = {"status": "failed", "error": str(e)}
+
+
+def process_git_repository(task_id: str, repo_url: str, project_base_name: str):
+    """Worker to handle Git cloning before triggering the QA generation."""
+    callback = create_progress_callback(task_id)
+    try:
+        callback(5, "Cloning GitHub repository into memory...")
+        project_files = GitExtractor.extract_repository(repo_url)
+        
+        if not project_files:
+            tasks_store[task_id] = {"status": "failed", "error": "No valid Python files found."}
+            return
+        
+        callback(10, "Repository cloned. Starting AI engine...")
+        
+        # Chain into the main QA generation logic, passing the existing callback down
+        generate_qa_artifacts(task_id, project_files, project_base_name, callback)
+        
+    except Exception as e:
+        tasks_store[task_id] = {"status": "failed", "error": str(e)}
+
 
 @app.post("/generate-tests-from-zip")
-async def generate_tests_from_zip_endpoint(file: UploadFile = File(...)):
-    """
-    Endpoint to process a zipped Python project and return a downloadable ZIP 
-    containing the global test plan and the pytest suite.
-    """
-    # Immediate validation
+async def generate_tests_from_zip_endpoint(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
+    """Accepts a ZIP, queues the QA generation, and returns a Task ID."""
     if not file.filename.endswith('.zip'):
         raise HTTPException(status_code=400, detail="Uploaded file must be a .zip archive.")
 
+    project_base_name = file.filename.replace(".zip", "")
+    zip_bytes = await file.read()
+    
+    # Extract synchronously to fail fast if the ZIP is corrupted or empty
     try:
-        # Extract the base name of the project without the .zip extension
-        project_base_name = file.filename.replace(".zip", "")
-
-        # Read the file bytes asynchronously into memory
-        zip_bytes = await file.read()
-        
-        # Extract valid Python files using our utility
         project_files = ZipExtractor.extract_python_files(zip_bytes)
-        
         if not project_files:
-            raise HTTPException(status_code=400, detail="No valid Python files found in the provided ZIP.")
-
-        # Trigger the LangGraph execution pipeline
-        result_state = generator_agent.run(project_files=project_files)
-        
-        if result_state.get("error"):
-            raise HTTPException(status_code=400, detail=result_state["error"])
-
-        test_plan_content = result_state.get("test_plan", "")
-        generated_code_content = result_state.get("generated_tests", "")
-
-        # Create the output ZIP file in memory
-        memory_zip = io.BytesIO()
-        with zipfile.ZipFile(memory_zip, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
-            # Add the Markdown test plan
-            zf.writestr(f"test_plan_{project_base_name}.md", test_plan_content)
-            # Add the Python test suite
-            zf.writestr(f"test_{project_base_name}.py", generated_code_content)
-
-        # Return the ZIP file as a downloadable response
-        headers = {
-            "Content-Disposition": f"attachment; filename=QA_suite_{project_base_name}.zip"
-        }
-        
-        return Response(
-            content=memory_zip.getvalue(),
-            media_type="application/zip",
-            headers=headers
-        )
-
-    except HTTPException:
-        raise    
+            raise HTTPException(status_code=400, detail="No valid Python files found.")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # Queue the background task with initial progress state
+    task_id = str(uuid.uuid4())
+    tasks_store[task_id] = {
+        "status": "processing", 
+        "progress": 0, 
+        "message": "Queueing ZIP extraction task..."
+    }
+    background_tasks.add_task(generate_qa_artifacts, task_id, project_files, project_base_name)
+    
+    return JSONResponse(status_code=202, content={"task_id": task_id, "status": "processing"})
 
 
 @app.post("/generate-tests-from-git")
-async def generate_tests_from_git_endpoint(request: GitGenerationRequest):
+async def generate_tests_from_git_endpoint(request: GitGenerationRequest, background_tasks: BackgroundTasks):
+    """Accepts a Git URL, queues the repository cloning and QA generation, and returns a Task ID."""
+    parsed_url = urlparse(str(request.repo_url))
+    path_parts = parsed_url.path.strip("/").split("/")
+    project_base_name = path_parts[-1].replace(".git", "") if path_parts else "git_project"
+
+    # Queue the background task with initial progress state
+    task_id = str(uuid.uuid4())
+    tasks_store[task_id] = {
+        "status": "processing", 
+        "progress": 0, 
+        "message": "Queueing GitHub cloning task..."
+    }
+    background_tasks.add_task(process_git_repository, task_id, str(request.repo_url), project_base_name)
+    
+    return JSONResponse(status_code=202, content={"task_id": task_id, "status": "processing"})
+
+
+@app.get("/status/{task_id}")
+async def get_task_status(task_id: str):
     """
-    Endpoint to clone a Git repository, extract its context, and return a 
-    downloadable ZIP containing the global test plan and the pytest suite.
+    Checks the status of a task. 
+    Returns the ZIP file directly if completed, or JSON with progress if still processing/failed.
     """
-    try:
-        # Extract the repository name from the URL
-        parsed_url = urlparse(str(request.repo_url))
-        path_parts = parsed_url.path.strip("/").split("/")
-        project_base_name = path_parts[-1].replace(".git", "") if path_parts else "git_project"
+    task = tasks_store.get(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found or already downloaded.")
 
-        # Clone and extract files using our Git utility
-        try:
-            # Pydantic's HttpUrl needs to be cast to string for subprocess
-            project_files = GitExtractor.extract_repository(str(request.repo_url))
-        except RuntimeError as extractor_error:
-            # Catch the error from subprocess
-            raise HTTPException(status_code=400, detail=str(extractor_error))
-
-        if not project_files:
-            raise HTTPException(status_code=400, detail="No valid Python or context files found in the repository.")
-
-        # Trigger the LangGraph execution pipeline (Same as ZIP workflow!)
-        result_state = generator_agent.run(project_files=project_files)
-        
-        if result_state.get("error"):
-            raise HTTPException(status_code=400, detail=result_state["error"])
-
-        test_plan_content = result_state.get("test_plan", "")
-        generated_code_content = result_state.get("generated_tests", "")
-
-        # Create the output ZIP file in memory
-        memory_zip = io.BytesIO()
-        with zipfile.ZipFile(memory_zip, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
-            zf.writestr(f"test_plan_{project_base_name}.md", test_plan_content)
-            zf.writestr(f"test_{project_base_name}.py", generated_code_content)
-
-        headers = {
-            "Content-Disposition": f"attachment; filename=QA_suite_{project_base_name}.zip"
+    if task["status"] == "processing":
+        # Return the newly added progress tracking fields
+        return {
+            "task_id": task_id, 
+            "status": "processing",
+            "progress": task.get("progress", 0),
+            "message": task.get("message", "Processing...")
         }
-        
-        return Response(
-            content=memory_zip.getvalue(),
-            media_type="application/zip",
-            headers=headers
-        )
+    
+    if task["status"] == "failed":
+        error_msg = task.get("error", "Unknown error")
+        del tasks_store[task_id] # Clean up memory
+        return JSONResponse(status_code=400, content={"task_id": task_id, "status": "failed", "error": error_msg})
 
-    except HTTPException:
-        raise    
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
+    if task["status"] == "completed":
+        file_bytes = task["file_bytes"]
+        filename = task["filename"]
+        
+        # Prevent memory leak by removing the task once downloaded
+        del tasks_store[task_id]
+        
+        headers = {"Content-Disposition": f"attachment; filename={filename}"}
+        return Response(content=file_bytes, media_type="application/zip", headers=headers)
 
 
 @app.get("/health")
 def health():
     """Health check for the API."""
-    return {"status": "ok", "agent": "Generator Agent V3 up and running"}
+    return {"status": "ok", "agent": "Generator Agent V3 Async up and running"}
