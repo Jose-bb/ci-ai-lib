@@ -10,18 +10,29 @@ class CodeParser:
     @staticmethod
     def extract_project_structure(project_files: Dict[str, str]) -> Dict[str, Any]:
         """
-        Parses multiple Python files and extracts classes, methods, and top-level functions for each.
+        Parses multiple files. Extracts classes and methods for Python files,
+        and passes context files directly as raw content.
         
         Args:
             project_files (Dict[str, str]): Dictionary mapping file paths to their raw source code.
             
         Returns:
-            Dict[str, Any]: A nested dictionary containing the structural metadata of the entire project.
-                            If a syntax error occurs in ANY file, returns a dictionary with the 'error' key.
+            Dict[str, Any]: A nested dictionary containing the structural metadata and context.
+                            If a syntax error occurs in any Python file, returns a dict with the 'error' key.
         """
         project_structure = {}
 
         for file_path, source_code in project_files.items():
+            
+            # Handle Context Files (Non-Python)
+            if not file_path.endswith('.py'):
+                project_structure[file_path] = {
+                    "type": "context_file",
+                    "content": source_code
+                }
+                continue
+
+            # Handle Python Files (AST Parsing)
             try:
                 # Analyze the code safely without executing it
                 tree = ast.parse(source_code)
@@ -30,6 +41,7 @@ class CodeParser:
                 return {"error": f"Failed to parse '{file_path}'. Syntax error: {str(e)}"}
 
             file_structure = {
+                "type": "python_module",
                 "classes": {},
                 "standalone_functions": []
             }
