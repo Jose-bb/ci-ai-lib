@@ -1,4 +1,4 @@
-# Automated Tests Generator: LangGraph QA Agent (V3 Asynchronous)
+# Automated Tests Generator: LangGraph QA Agent (V3)
 
 This use case provides a FastAPI endpoint that acts as an autonomous Quality Assurance engineer. Powered by LangGraph, Azure OpenAI, and native Python libraries, it ingests full project repositories via `.zip` uploads or **direct Git URLs**, analyzes the global structure, and orchestrates a multi-step pipeline. 
 

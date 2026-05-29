@@ -2,6 +2,7 @@ import os
 import io
 import uuid
 import zipfile
+from typing import Optional
 from urllib.parse import urlparse
 from fastapi import FastAPI, HTTPException, UploadFile, File, BackgroundTasks
 from fastapi.responses import Response, JSONResponse
@@ -21,6 +22,7 @@ tasks_store = {}
 
 class GitGenerationRequest(BaseModel):
     repo_url: HttpUrl
+    github_token: str | None = None
 
 def create_progress_callback(task_id: str):
     """
@@ -72,12 +74,12 @@ def generate_qa_artifacts(task_id: str, project_files: dict, project_base_name: 
         tasks_store[task_id] = {"status": "failed", "error": str(e)}
 
 
-def process_git_repository(task_id: str, repo_url: str, project_base_name: str):
+def process_git_repository(task_id: str, repo_url: Optional[str], github_token: str, project_base_name: str):
     """Worker to handle Git cloning before triggering the QA generation."""
     callback = create_progress_callback(task_id)
     try:
         callback(5, "Cloning GitHub repository into memory...")
-        project_files = GitExtractor.extract_repository(repo_url)
+        project_files = GitExtractor.extract_repository(repo_url, github_token)
         
         if not project_files:
             tasks_store[task_id] = {"status": "failed", "error": "No valid Python files found."}
@@ -135,7 +137,7 @@ async def generate_tests_from_git_endpoint(request: GitGenerationRequest, backgr
         "progress": 0, 
         "message": "Queueing GitHub cloning task..."
     }
-    background_tasks.add_task(process_git_repository, task_id, str(request.repo_url), project_base_name)
+    background_tasks.add_task(process_git_repository, task_id, str(request.repo_url), request.github_token, project_base_name)
     
     return JSONResponse(status_code=202, content={"task_id": task_id, "status": "processing"})
 
