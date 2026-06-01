@@ -1,7 +1,7 @@
 import os
 import subprocess
 import tempfile
-from typing import Dict
+from typing import Dict, Optional
 
 class GitExtractor:
     """
@@ -17,36 +17,45 @@ class GitExtractor:
     CONTEXT_FILES = {'README.md', 'requirements.txt', '.env.example', 'pyproject.toml'}
 
     @staticmethod
-    def extract_repository(repo_url: str) -> Dict[str, str]:
+    def extract_repository(repo_url: str, github_token: Optional[str] = None) -> Dict[str, str]:
         """
         Clones a Git repository into an ephemeral temporary directory, extracts
         relevant source code and context files, and returns their contents.
 
         Args:
             repo_url (str): The HTTPS URL of the Git repository.
+            github_token (str, optional): The GitHub token for private repositories.
 
         Returns:
             Dict[str, str]: A dictionary where keys are relative file paths 
                             and values are the file contents.
         
         Raises:
-            RuntimeError: If the git clone command fails (e.g., invalid URL).
+            RuntimeError: If the git clone command fails (e.g., invalid URL or unauthorized access).
         """
         extracted_files = {}
+        cmd = ['git', 'clone', '--depth', '1']
 
         # Create an ephemeral temporary directory that automatically cleans up
         with tempfile.TemporaryDirectory() as temp_dir:
             try:
                 # Execute a shallow clone (--depth 1) to save bandwidth and time
-                subprocess.run(
-                    ['git', 'clone', '--depth', '1', repo_url, temp_dir],
-                    check=True,
-                    capture_output=True,
-                    text=True
-                )
+                if github_token:
+                    auth_url = repo_url.replace("https://", f"https://x-access-token:{github_token}@")
+                    cmd.append(auth_url)
+                else:
+                    cmd.append(repo_url)
+                
+                cmd.append(temp_dir)
+                subprocess.run(cmd, check=True, capture_output=True, text=True)
+                
             except subprocess.CalledProcessError as e:
-                # Capture the standard error from Git and raise it for the API to handle
-                raise RuntimeError(f"Failed to clone repository. Error: {e.stderr}")
+                error_output = e.stderr or str(e)
+                # Mask the user's PAT token in the exception message before raising it to the API layer
+                if github_token and github_token in error_output:
+                    error_output = error_output.replace(github_token, "***MASKED_TOKEN***")
+                
+                raise RuntimeError(f"Failed to clone repository. Error: {error_output}")
 
             # Walk through the downloaded repository
             for root, dirs, files in os.walk(temp_dir):

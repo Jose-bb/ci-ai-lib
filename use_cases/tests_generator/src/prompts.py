@@ -17,7 +17,7 @@ The Test Plan MUST include:
 3. Integration Context: Briefly map out how the different modules interact with each other and with external services mentioned in the context files.
 
 CRITICAL RULES:
-- First, thoroughly read any files marked as 'context_file' (e.g., README.md, .env.example) to understand what the application does before looking at the Python code.
+- First, thoroughly read any context or configuration files (e.g., README.md, requirements.txt, .env.example) included in the context to understand what the application does before looking at the Python code.
 - Do NOT generate any Python code in this step. Only output the Markdown document.
 - APPLY RISK-BASED QA: Do not attempt to cover 100% of the files. Prioritize core business logic, complex algorithms, public APIs, and error-prone functions. 
 - IGNORE TRIVIAL CODE: Skip simple data classes, empty initializations, basic getters/setters, and boilerplate code to keep the test plan highly focused and prevent token exhaustion.
@@ -45,7 +45,7 @@ CRITICAL ARCHITECTURE RULES:
 5. Code Style:
    - Write clear, clean Python code.
    - Every single test function MUST include a numbered docstring following this exact format: \"\"\"Test X: Description of the test case\"\"\".
-6. Output: Return ONLY the raw, valid Python code. Do not include any markdown code blocks (like ```python) or introductory/concluding explanations.
+6. Output: Return ONLY the raw, valid Python code. Do NOT include any markdown code blocks (like ```python) or introductory/concluding explanations. The payload must be directly executable.
 
 PROJECT FILES CONTEXT:
 {project_context}

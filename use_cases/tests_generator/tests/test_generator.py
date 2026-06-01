@@ -143,7 +143,7 @@ def test_5_async_endpoint_syntax_error(mock_graph_run):
 @patch('use_cases.tests_generator.src.main.GitExtractor.extract_repository')
 @patch('use_cases.tests_generator.src.main.generator_agent.run')
 def test_6_async_git_endpoint_success(mock_graph_run, mock_git_extract):
-    """Test 6: Verifies the async flow for GitHub URL processing."""
+    """Test 6: Verifies the async flow for GitHub URL processing with an optional token."""
     mock_git_extract.return_value = {"src/main.py": "def dummy(): pass"}
     mock_graph_run.return_value = {
         "error": None,
@@ -153,7 +153,10 @@ def test_6_async_git_endpoint_success(mock_graph_run, mock_git_extract):
     
     response_post = client.post(
         "/generate-tests-from-git",
-        json={"repo_url": "https://github.com/dummy/repo.git"}
+        json={
+            "repo_url": "https://github.com/dummy/repo.git",
+            "github_token": "valid_token_123"
+        }
     )
     
     assert response_post.status_code == 202
@@ -182,3 +185,31 @@ def test_7_async_git_endpoint_failure(mock_git_extract):
     response_get = client.get(f"/status/{task_id}")
     assert response_get.status_code == 400
     assert "Failed to clone repository" in response_get.text
+
+
+@patch('use_cases.tests_generator.src.main.GitExtractor.extract_repository')
+def test_8_async_git_token_masking_on_error(mock_git_extract):
+    """Test 8: Verifies that Personal Access Tokens are securely masked in error messages."""
+    secret_token = "super_secret_pat_999"
+    
+    # Simulate a git clone failure where the raw standard error outputs the injected URL
+    mock_git_extract.side_effect = Exception(f"fatal: repository 'https://x-access-token:{secret_token}@github.com/dummy/private.git/' not found")
+    
+    response_post = client.post(
+        "/generate-tests-from-git",
+        json={
+            "repo_url": "https://github.com/dummy/private.git",
+            "github_token": secret_token
+        }
+    )
+    assert response_post.status_code == 202
+    task_id = response_post.json()["task_id"]
+    
+    response_get = client.get(f"/status/{task_id}")
+    assert response_get.status_code == 400
+    
+    error_msg = response_get.json()["error"]
+    
+    # Assert that the token was effectively scrubbed from the exposed error string
+    assert secret_token not in error_msg
+    assert "***MASKED_TOKEN***" in error_msg

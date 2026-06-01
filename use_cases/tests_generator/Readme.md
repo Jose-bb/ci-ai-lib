@@ -1,4 +1,4 @@
-# Automated Tests Generator: LangGraph QA Agent (V3 Asynchronous)
+# Automated Tests Generator: LangGraph QA Agent (V4)
 
 This use case provides a FastAPI endpoint that acts as an autonomous Quality Assurance engineer. Powered by LangGraph, Azure OpenAI, and native Python libraries, it ingests full project repositories via `.zip` uploads or **direct Git URLs**, analyzes the global structure, and orchestrates a multi-step pipeline. 
 
@@ -15,7 +15,7 @@ The architecture is fully asynchronous. It utilizes background tasks and a globa
 - `utilities/`:
   - `parser.py`: Utility module that safely extracts a global hierarchical map of classes and functions from all ingested Python files.
   - `zip_extractor.py`: Handles in-memory extraction, sanitization (ignoring macOS/hidden files), and filtering of `.zip` uploads.
-  - `git_extractor.py`: Handles cloning, temporary storage, and extraction of Python files directly from public GitHub repositories.
+  - `git_extractor.py`: Handles cloning, temporary storage, and extraction of Python files directly from public and private GitHub repositories using secure token authentication.
 - `Dockerfile`: Containerization setup for this microservice.
 
 
@@ -28,13 +28,14 @@ The architecture is fully asynchronous. It utilizes background tasks and a globa
 - **Fail-Fast Validations**: The API strictly enforces `.zip` file extensions and captures syntax errors during the parsing phase to halt graph execution, saving LLM tokens.
 - **Asynchronous Architecture**: Utilizes FastAPI `BackgroundTasks` to offload heavy LLM computations and repository cloning, instantly returning a `202 Accepted` status with a unique Task ID.
 - **Real-Time Progress Tracking**: Injects a closure-based callback directly into the LangGraph state, allowing the AI nodes to update their percentage and status messages dynamically for the frontend to poll.
-- **Git Repository Ingestion**: Bypasses manual ZIP creation by directly pulling code from public Git URLs via the `GitExtractor`.
+- **Git Repository Ingestion (Public & Private)**: Bypasses manual ZIP creation by directly pulling code from Git URLs via the `GitExtractor`. Supports optional GitHub Personal Access Tokens (PAT) to securely clone private enterprise repositories.
+- **Enterprise Security**: Automatically masks sensitive credentials (like PATs) in the event of extraction or network failures, preventing token leakage in API responses or server logs.
 
 
 ## API Endpoints
 
 - `POST /generate-tests-from-zip`: Accepts a `.zip` file containing Python source code. Queues the task and returns a `202 Accepted` with a `task_id`.
-- `POST /generate-tests-from-git`: Accepts a JSON payload `{"repo_url": "..."}`. Queues the task and returns a `202 Accepted` with a `task_id`.
+- `POST /generate-tests-from-git`: Accepts a JSON payload `{"repo_url": "...", "github_token": "optional_pat_here"}`. Queues the task and returns a `202 Accepted` with a `task_id`.
 - `GET /status/{task_id}`: Polls the current status of the task. 
   - Returns a JSON with `progress` (0-100) and `message` if still processing.
   - Returns the downloadable `.zip` file containing the Markdown test plan and `pytest` suite if completed.
