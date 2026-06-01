@@ -17,7 +17,7 @@ class GraphState(TypedDict):
     progress_callback: Optional[Callable[[int, str], None]]
 
 class QAGeneratorGraph:
-    """Encapsulates the LangGraph architecture for the Tests Generator (V3)."""
+    """Encapsulates the LangGraph architecture for the Tests Generator (V4)."""
 
     def __init__(self, provider: str = "azure_openai"):
         self.llm = LLMFactory.get_llm(provider)
@@ -44,6 +44,7 @@ class QAGeneratorGraph:
 
     def qa_planner_node(self, state: GraphState) -> dict:
         """Drafts the Global Test Plan in Markdown based on the project structure."""
+        # Defensive check in case conditional routing fails
         if state.get("error"):
             return {}
 
@@ -73,6 +74,7 @@ class QAGeneratorGraph:
 
     def test_coder_node(self, state: GraphState) -> dict:
         """Generates the global pytest executable code based on the Test Plan."""
+        # Defensive check
         if state.get("error"):
             return {}
 
@@ -130,7 +132,7 @@ class QAGeneratorGraph:
     def run(self, project_files: Dict[str, str], progress_callback: Optional[Callable[[int, str], None]] = None) -> dict:
         """Entry point to execute the graph."""
         if progress_callback:
-            progress_callback(10, "Initialising LangGraph and preparing files...")
+            progress_callback(10, "Initializing LangGraph and preparing files...")
 
         inputs = {
             "project_files": project_files,

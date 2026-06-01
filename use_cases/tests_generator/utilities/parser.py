@@ -28,7 +28,7 @@ class CodeParser:
             if not file_path.endswith('.py'):
                 project_structure[file_path] = {
                     "type": "context_file",
-                    "content": source_code
+                    "status": "Content provided in context block"
                 }
                 continue
 

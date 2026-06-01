@@ -12,7 +12,7 @@ from use_cases.tests_generator.src.generator_graph import QAGeneratorGraph
 from use_cases.tests_generator.utilities.zip_extractor import ZipExtractor
 from use_cases.tests_generator.utilities.git_extractor import GitExtractor
 
-app = FastAPI(title="Tests Generator API (V3)", version="3.0.0")
+app = FastAPI(title="Tests Generator API (V4)", version="4.0.0")
 
 # Initialize LangGraph globally to prevent compilation overhead
 generator_agent = QAGeneratorGraph()
@@ -22,7 +22,7 @@ tasks_store = {}
 
 class GitGenerationRequest(BaseModel):
     repo_url: HttpUrl
-    github_token: str | None = None
+    github_token: Optional[str] = None
 
 def create_progress_callback(task_id: str):
     """
@@ -74,8 +74,8 @@ def generate_qa_artifacts(task_id: str, project_files: dict, project_base_name: 
         tasks_store[task_id] = {"status": "failed", "error": str(e)}
 
 
-def process_git_repository(task_id: str, repo_url: Optional[str], github_token: str, project_base_name: str):
-    """Worker to handle Git cloning before triggering the QA generation."""
+def process_git_repository(task_id: str, repo_url: str, github_token: Optional[str], project_base_name: str):
+    """Worker to handle Git cloning with optional PAT authentication."""
     callback = create_progress_callback(task_id)
     try:
         callback(5, "Cloning GitHub repository into memory...")
@@ -91,7 +91,12 @@ def process_git_repository(task_id: str, repo_url: Optional[str], github_token: 
         generate_qa_artifacts(task_id, project_files, project_base_name, callback)
         
     except Exception as e:
-        tasks_store[task_id] = {"status": "failed", "error": str(e)}
+        error_msg = str(e)
+        # Prevent PAT token leakage in error logs or API responses
+        if github_token and github_token in error_msg:
+            error_msg = error_msg.replace(github_token, "***MASKED_TOKEN***")
+            
+        tasks_store[task_id] = {"status": "failed", "error": error_msg}
 
 
 @app.post("/generate-tests-from-zip")
@@ -125,7 +130,7 @@ async def generate_tests_from_zip_endpoint(background_tasks: BackgroundTasks, fi
 
 @app.post("/generate-tests-from-git")
 async def generate_tests_from_git_endpoint(request: GitGenerationRequest, background_tasks: BackgroundTasks):
-    """Accepts a Git URL, queues the repository cloning and QA generation, and returns a Task ID."""
+    """Accepts a Git URL (and optional PAT), queues repository cloning, and returns a Task ID."""
     parsed_url = urlparse(str(request.repo_url))
     path_parts = parsed_url.path.strip("/").split("/")
     project_base_name = path_parts[-1].replace(".git", "") if path_parts else "git_project"
@@ -180,4 +185,4 @@ async def get_task_status(task_id: str):
 @app.get("/health")
 def health():
     """Health check for the API."""
-    return {"status": "ok", "agent": "Generator Agent V3 Async up and running"}
+    return {"status": "ok", "agent": "Generator Agent V4 up and running"}

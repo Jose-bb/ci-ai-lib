@@ -5,11 +5,11 @@ from typing import Dict
 class ZipExtractor:
     """
     Utility class to handle in-memory extraction of ZIP files.
-    Filters out non-essential files and directories to keep the LLM context clean.
+    Filters out non-essential files, directories, and OS artifacts to keep the LLM context clean.
     """
 
-    # Directories and file extensions to ignore during extraction to save tokens
-    EXCLUDED_DIRS = {'.git', '__pycache__', '.venv', 'venv', 'env', '.pytest_cache', 'node_modules'}
+    # Directories and OS artifacts to ignore during extraction to save tokens
+    EXCLUDED_DIRS = {'.git', '__pycache__', '.venv', 'venv', 'env', '.pytest_cache', 'node_modules', '__MACOSX'}
     
     # Allowed file extensions and specific context files
     ALLOWED_EXTENSIONS = {'.py'}
@@ -40,6 +40,10 @@ class ZipExtractor:
                 
                 path_parts = file_path.split('/')
                 file_name = path_parts[-1]
+
+                # Skip OS-generated hidden files (like .DS_Store or macOS double-files)
+                if file_name.startswith('._') or file_name == '.DS_Store':
+                    continue
 
                 # Skip files located inside excluded directories
                 if any(excluded_dir in path_parts for excluded_dir in ZipExtractor.EXCLUDED_DIRS):
