@@ -1,0 +1,14 @@
+# --- Base & API ---
+fastapi==0.136.3
+uvicorn==0.48.0
+pydantic==2.13.4
+python-dotenv==1.2.2
+
+# --- LLM & Orchestration ---
+openai==2.38.0
+pyautogen==0.10.0
+
+# --- Testing ---
+pytest==9.0.3
+httpx==0.28.1
+pytest-asyncio==1.4.0
