@@ -6,7 +6,7 @@ python-dotenv==1.2.2
 
 # --- LLM & Orchestration ---
 openai==2.38.0
-pyautogen==0.10.0
+pyautogen==0.2.35
 
 # --- Testing ---
 pytest==9.0.3
