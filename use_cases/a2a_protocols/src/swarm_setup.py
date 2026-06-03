@@ -2,8 +2,9 @@ import os
 import autogen
 from dotenv import load_dotenv
 
-# Import the predefined agents from our agents module
-from use_cases.a2a_protocols.src.agents import (user_proxy, software_agent, hardware_agent, architect_agent,)
+# Import the predefined agents from our agents module and tools
+from use_cases.a2a_protocols.src.agents import (user_proxy, software_agent, hardware_agent, architect_agent)
+from use_cases.a2a_protocols.src.tools.gpu_metrics import get_vram_status
 
 def setup_swarm():
     """Instantiates the AutoGen GroupChat and its routing Manager."""
@@ -27,10 +28,23 @@ def setup_swarm():
         "temperature": 0.2, # Kept low for deterministic and highly technical answers
     }
 
+    software_agent.llm_config = llm_config.copy()
+    hardware_agent.llm_config = llm_config.copy()
+    architect_agent.llm_config = llm_config.copy()
+
     # Bind the OpenAI client to the expert agents dynamically
     software_agent.client = autogen.OpenAIWrapper(**llm_config)
     hardware_agent.client = autogen.OpenAIWrapper(**llm_config)
     architect_agent.client = autogen.OpenAIWrapper(**llm_config)
+
+    # Tool execution
+    autogen.agentchat.register_function(
+        get_vram_status,
+        caller=hardware_agent,
+        executor=user_proxy,
+        name="get_vram_status",
+        description="Checks the current GPU VRAM allocation and identifies processes consuming memory.",
+    )
 
     # Swarm (Group Chat) Instantiation
     committee_chat = autogen.GroupChat(
