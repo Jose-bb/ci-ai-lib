@@ -1,7 +1,11 @@
 import os
 import sys
 import pytest
+import warnings
 from unittest.mock import patch, MagicMock
+
+# Eliminate flaml's harmless warning
+warnings.filterwarnings("ignore", category=UserWarning, module="flaml")
 
 # Ensure the root directory is accessible for absolute imports
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..'))

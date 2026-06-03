@@ -1,4 +1,9 @@
 import sys
+import warnings
+
+# Eliminate flaml's harmless warning
+warnings.filterwarnings("ignore", category=UserWarning, module="flaml")
+
 from use_cases.a2a_protocols.src.swarm_setup import setup_swarm
 
 def main():
