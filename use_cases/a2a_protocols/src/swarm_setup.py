@@ -4,7 +4,11 @@ from dotenv import load_dotenv
 
 # Import the predefined agents from our agents module and tools
 from use_cases.a2a_protocols.src.agents import (user_proxy, software_agent, hardware_agent, architect_agent)
+
+# Tools
 from use_cases.a2a_protocols.src.tools.gpu_metrics import get_vram_status
+from use_cases.a2a_protocols.src.tools.docker_logs import get_docker_logs
+from use_cases.a2a_protocols.src.tools.system_health import get_system_ram_cpu
 
 def setup_swarm():
     """Instantiates the AutoGen GroupChat and its routing Manager."""
@@ -37,14 +41,34 @@ def setup_swarm():
     hardware_agent.client = autogen.OpenAIWrapper(**llm_config)
     architect_agent.client = autogen.OpenAIWrapper(**llm_config)
 
-    # Tool execution
-    autogen.agentchat.register_function(
-        get_vram_status,
-        caller=hardware_agent,
-        executor=user_proxy,
-        name="get_vram_status",
-        description="Checks the current GPU VRAM allocation and identifies processes consuming memory.",
-    )
+    # Tool registration: Define the list of tools and who owns them
+    tool_registry = [
+        {
+            "func": get_vram_status,
+            "caller": hardware_agent,
+            "desc": "Checks the current GPU VRAM allocation."
+        },
+        {
+            "func": get_system_ram_cpu,
+            "caller": hardware_agent,
+            "desc": "Checks the host machine's CPU and RAM."
+        },
+        {
+            "func": get_docker_logs,
+            "caller": software_agent,
+            "desc": "Fetches logs from a specified Docker container."
+        }
+    ]
+
+    # Iterate and register dynamically
+    for tool in tool_registry:
+        autogen.agentchat.register_function(
+            tool["func"],
+            caller=tool["caller"],
+            executor=user_proxy,
+            name=tool["func"].__name__,
+            description=tool["desc"],
+        )
 
     # Swarm (Group Chat) Instantiation
     committee_chat = autogen.GroupChat(
