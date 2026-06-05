@@ -46,9 +46,9 @@ def main():
     
     # Initiate the chat
     proxy.initiate_chat(
-        manager,
-        message=f"INCIDENT REPORT:\n{incident_report}",
-        summary_method="reflection_with_llm", 
+        manager, 
+        message=f"INCIDENT REPORT:\n{incident_report}", 
+        summary_method="reflection_with_llm"
     )
 
     print("\n--- Committee Session Terminated ---")

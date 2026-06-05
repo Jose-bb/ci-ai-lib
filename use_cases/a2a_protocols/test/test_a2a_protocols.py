@@ -68,9 +68,9 @@ class TestA2AProtocols:
     def test_3_setup_swarm_configuration_and_tools(self, mock_register_func, mock_getenv):
         """Test 3: Verifies that setup_swarm structures the LLM config and registers the 3 tools."""
         mock_getenv.side_effect = lambda k, default="": {
-            "AZURE_OPENAI_MODEL": "test-model",
-            "AZURE_OPENAI_API_KEY": "test-key-1234567890",
-            "AZURE_OPENAI_ENDPOINT": "https://test.endpoint.azure.com/",
+            "AZURE_OPENAI_MODEL": "test-model", 
+            "AZURE_OPENAI_API_KEY": "test-key-1234567890", 
+            "AZURE_OPENAI_ENDPOINT": "https://test.endpoint.azure.com/", 
             "AZURE_OPENAI_API_VERSION": "2024-02-01"
         }.get(k, default)
 
@@ -96,7 +96,7 @@ class TestA2AProtocols:
         assert architect_agent.name == "Chief_Architect"
 
         # Check for tool delegation rules
-        assert "TOOL DELEGATION" in software_agent.system_message
+        assert "PROACTIVE TOOL USE" in software_agent.system_message
         assert "PROACTIVE TOOL USE" in hardware_agent.system_message
         
         # Check Architect's new Client-Facing role
