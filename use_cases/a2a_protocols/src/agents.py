@@ -1,12 +1,44 @@
 import os
 import autogen
+import asyncio
 
 # Calculate the absolute path to the workspace folder within the use case
 current_dir = os.path.dirname(os.path.abspath(__file__))
 workspace_dir = os.path.join(current_dir, "..", "workspace")
 
+# Custom Proxy to bridge AutoGen's human input with FastAPI WebSockets
+class WebSocketUserProxyAgent(autogen.UserProxyAgent):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # We create an async lock to prevent concurrency collisions on the WebSocket
+        self.ws_lock = asyncio.Lock()
+
+    async def a_get_human_input(self, prompt: str) -> str:
+        """Overrides the native async input to route through the WebSocket with a concurrency lock."""
+        if hasattr(self, "websocket") and self.websocket:
+            # The lock ensures only one tool can ask the human for input at a time
+            async with self.ws_lock:
+                try:
+                    # Send the authorization/input request to the frontend
+                    await self.websocket.send_json({
+                        "type": "human_input_request",
+                        "prompt": prompt
+                    })
+                    # Pause execution and wait for the human's response via the socket
+                    data = await self.websocket.receive_json()
+                    # Extract the answer (e.g., "y", "n", or extra context)
+                    return data.get("content", "")
+                except Exception as e:
+                    print(f"WebSocket input error: {e}")
+                    # If the socket fails, wait 1s to prevent cpu-burning infinite loops
+                    await asyncio.sleep(1)
+                    return ""
+        else:
+            # Fallback: if no websocket is attached, use the standard console
+            return await super().a_get_human_input(prompt)
+
 # Human Avatar (User Elicitation): Represents the user in the chat. Triggers terminal prompts for context
-user_proxy = autogen.UserProxyAgent(
+user_proxy = WebSocketUserProxyAgent(
     name="User_Proxy",
     system_message=(
         "A human admin. I can provide additional context, approve tools, or clarify errors. "

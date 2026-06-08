@@ -10,9 +10,48 @@ from use_cases.a2a_protocols.src.tools.gpu_metrics import get_vram_status
 from use_cases.a2a_protocols.src.tools.docker_logs import get_docker_logs
 from use_cases.a2a_protocols.src.tools.system_health import get_system_ram_cpu
 
-def setup_swarm():
-    """Instantiates the AutoGen GroupChat and its routing Manager."""
+def setup_swarm(websocket=None):
+    """Instantiates the AutoGen GroupChat and its routing Manager, injecting the WebSocket."""
     load_dotenv()
+
+    # Inject the websocket into the agents so they can handle real-time I/O
+    if websocket:
+        user_proxy.websocket = websocket
+        software_agent.websocket = websocket
+        hardware_agent.websocket = websocket
+        architect_agent.websocket = websocket
+
+    # Websocket broadcast hook
+    async def broadcast_message(recipient, messages, sender, config):
+        """Intercepts incoming messages and sends a copy to the frontend."""
+        if not messages or not websocket:
+            return False, None  # Continue normal execution
+
+        last_msg = messages[-1]
+        content = last_msg.get("content", "")
+        
+        # In a GroupChat, the true speaker's name is tucked inside the 'name' key
+        speaker_name = last_msg.get("name", sender.name)
+
+        # Only broadcast actual text messages, ignoring empty tool calls or bare termina signals
+        if content and content.strip() != "TERMINATE":
+            try:
+                await websocket.send_json({
+                    "type": "agent_message",
+                    "sender": speaker_name,
+                    "content": content
+                })
+            except Exception as e:
+                print(f"Broadcast error: {e}")
+                
+        # Allows AutoGen to continue processing the message normally without interrupting
+        return False, None  
+
+    # Hooks the interception function to the proxy to broadcast messages live
+    user_proxy.register_reply(
+        [autogen.Agent, None],
+        reply_func=broadcast_message
+    )
 
     # AutoGen requires a specific dictionary format for model configuration
     llm_config = {

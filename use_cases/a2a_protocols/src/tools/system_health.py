@@ -1,26 +1,20 @@
 import psutil
+from use_cases.a2a_protocols.src.tools.hitl_utils import request_human_approval
 
-def get_system_ram_cpu() -> str:
+async def get_system_ram_cpu() -> str:
     """
     Checks the host machine's physical CPU usage and standard RAM (System Memory).
     Call this tool to rule out host-level bottlenecks or out-of-memory (RAM) crashes 
     before assuming it is a GPU (CUDA) issue.
     """
-    # HITL firewall
-    print("\n" + "="*60)
-    print("SECURITY ALERT: Hardware_Specialist requests permission to read Host RAM and CPU metrics.")
-    print("="*60)
+    # Centralized HITL call
+    is_approved = await request_human_approval(
+        prompt_message="Hardware_Specialist requests permission to read Host RAM and CPU metrics.",
+        success_message="Reading system RAM and CPU..."
+    )
     
-    while True:
-        user_input = input("Do you approve this execution? (y/n): ").strip().lower()
-        if user_input in ['y', 'yes']:
-            print("[+] Access GRANTED. Reading system RAM and CPU...\n")
-            break
-        elif user_input in ['n', 'no']:
-            print("[-] Access DENIED by User.\n")
-            return "ERROR: The human administrator denied permission to read system metrics."
-        else:
-            print("Invalid input. Please type 'y' for Yes, or 'n' for No.")
+    if not is_approved:
+        return "ERROR: The human administrator denied permission to read system metrics."
 
     # Tool execution logic
     cpu_usage = psutil.cpu_percent(interval=1)

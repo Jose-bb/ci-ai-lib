@@ -1,26 +1,20 @@
 import subprocess
+from use_cases.a2a_protocols.src.tools.hitl_utils import request_human_approval
 
-def get_docker_logs(container_name: str) -> str:
+async def get_docker_logs(container_name: str) -> str:
     """
     Fetches the last 30 lines of logs from a specified Docker container.
     Call this tool when you need to diagnose application crashes, 
     initialization errors, or container failures.
     """
-    # HITL firewall
-    print("\n" + "="*60)
-    print(f"SECURITY ALERT: Software_Engineer requests to read logs from Docker container: '{container_name}'")
-    print("="*60)
+    # Centralized HITL call
+    is_approved = await request_human_approval(
+        prompt_message=f"Software_Engineer requests to read logs from Docker container: '{container_name}'",
+        success_message=f"Fetching logs for {container_name}..."
+    )
     
-    while True:
-        user_input = input("Do you approve this execution? (y/n): ").strip().lower()
-        if user_input in ['y', 'yes']:
-            print(f"[+] Access GRANTED. Fetching logs for {container_name}...\n")
-            break
-        elif user_input in ['n', 'no']:
-            print("[-] Access DENIED by User.\n")
-            return "ERROR: The human administrator denied permission to read Docker logs."
-        else:
-            print("Invalid input. Please type 'y' for Yes, or 'n' for No.")
+    if not is_approved:
+        return "ERROR: The human administrator denied permission to read Docker logs."
 
     # Tool execution logic
     try:
