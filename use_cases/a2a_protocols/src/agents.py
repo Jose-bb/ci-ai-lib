@@ -2,6 +2,8 @@ import os
 import autogen
 import asyncio
 
+from use_cases.a2a_protocols.utilities.cost_tracker import calculate_turn_cost, format_telemetry_cost
+
 # Calculate the absolute path to the workspace folder within the use case
 current_dir = os.path.dirname(os.path.abspath(__file__))
 workspace_dir = os.path.join(current_dir, "..", "workspace")
@@ -10,7 +12,7 @@ workspace_dir = os.path.join(current_dir, "..", "workspace")
 class WebSocketUserProxyAgent(autogen.UserProxyAgent):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # We create an async lock to prevent concurrency collisions on the WebSocket
+        # Create an async lock to prevent concurrency collisions on the WebSocket
         self.ws_lock = asyncio.Lock()
 
     async def a_get_human_input(self, prompt: str) -> str:
@@ -102,3 +104,52 @@ architect_agent = autogen.AssistantAgent(
     ),
     llm_config=False,
 )
+
+
+# Telemetry Hooks
+def telemetry_hook(sender, message, recipient, silent):
+    """
+    Middleware function that intercepts messages before they are sent.
+    It extracts the agent's token usage, calculates the cost, and broadcasts it.
+    """
+    # cVerify the agent has an active LLM client attached
+    if hasattr(sender, "client") and sender.client is not None:
+        try:
+            usage = getattr(sender.client, "actual_usage_summary", {})
+            
+            if usage:
+                # AutoGen's usage dict contains models as keys
+                for model_name, stats in usage.items():
+                    if isinstance(stats, dict) and "total_tokens" in stats:
+                        p_tokens = stats.get("prompt_tokens", 0)
+                        c_tokens = stats.get("completion_tokens", 0)
+                        t_tokens = stats.get("total_tokens", 0)
+
+                        # Call the custom utility to calculate the real money cost
+                        cost_usd = calculate_turn_cost(p_tokens, c_tokens, model_name)
+                        telemetry_msg = format_telemetry_cost(sender.name, t_tokens, cost_usd)
+
+                        # Fire-and-forget the WebSocket message
+                        if hasattr(user_proxy, "websocket") and user_proxy.websocket:
+                            try:
+                                asyncio.create_task(
+                                    user_proxy.websocket.send_json({
+                                        "type": "status",
+                                        "content": telemetry_msg
+                                    })
+                                )
+                            except Exception as e:
+                                print(f"Telemetry broadcast error: {e}")
+                        
+                        # Break after finding the first valid model stats
+                        break 
+        except Exception as e:
+            print(f"[Ops Warning] Error in telemetry hook: {e}")
+
+    # Return the unmodified message so the chat continues normally
+    return message
+
+# Register the hook to all LLM-powered agents
+software_agent.register_hook(hookable_method="process_message_before_send", hook=telemetry_hook)
+hardware_agent.register_hook(hookable_method="process_message_before_send", hook=telemetry_hook)
+architect_agent.register_hook(hookable_method="process_message_before_send", hook=telemetry_hook)

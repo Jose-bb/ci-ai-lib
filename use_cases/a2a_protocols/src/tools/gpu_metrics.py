@@ -1,6 +1,9 @@
 import subprocess
-from use_cases.a2a_protocols.src.tools.hitl_utils import request_human_approval
 
+from use_cases.a2a_protocols.src.tools.tools_utils.hitl_utils import request_human_approval
+from use_cases.a2a_protocols.src.tools.tools_utils.tools_telemetry import measure_latency
+
+@measure_latency
 async def get_vram_status() -> str:
     """
     Checks the current GPU VRAM allocation and identifies processes consuming memory.

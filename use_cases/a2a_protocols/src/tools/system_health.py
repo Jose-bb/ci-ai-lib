@@ -1,6 +1,9 @@
 import psutil
-from use_cases.a2a_protocols.src.tools.hitl_utils import request_human_approval
 
+from use_cases.a2a_protocols.src.tools.tools_utils.hitl_utils import request_human_approval
+from use_cases.a2a_protocols.src.tools.tools_utils.tools_telemetry import measure_latency
+
+@measure_latency
 async def get_system_ram_cpu() -> str:
     """
     Checks the host machine's physical CPU usage and standard RAM (System Memory).

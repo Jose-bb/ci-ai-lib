@@ -1,6 +1,9 @@
 import subprocess
-from use_cases.a2a_protocols.src.tools.hitl_utils import request_human_approval
 
+from use_cases.a2a_protocols.src.tools.tools_utils.hitl_utils import request_human_approval
+from use_cases.a2a_protocols.src.tools.tools_utils.tools_telemetry import measure_latency
+
+@measure_latency
 async def get_docker_logs(container_name: str) -> str:
     """
     Fetches the last 30 lines of logs from a specified Docker container.

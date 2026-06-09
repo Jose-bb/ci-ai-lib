@@ -1,0 +1,89 @@
+body { 
+    font-family: Arial, sans-serif; 
+    background-color: #1e1e1e; 
+    color: #d4d4d4; 
+    padding: 20px; 
+}
+
+/* Flexbox layout for the main content */
+.container { 
+    display: flex; 
+    gap: 20px; 
+    margin-bottom: 15px; 
+}
+.chat-section { flex: 7; } /* Takes 70% of the space */
+.telemetry-section { flex: 3; } /* Takes 30% of the space */
+
+/* Chat Panel */
+#chat { 
+    height: 500px; 
+    overflow-y: scroll; 
+    background: #2d2d2d; 
+    padding: 15px; 
+    border: 1px solid #3c3c3c; 
+    border-radius: 4px; 
+}
+
+/* Telemetry Panel */
+#telemetry { 
+    height: 500px; 
+    overflow-y: scroll; 
+    background: #252526; 
+    padding: 15px; 
+    border: 1px solid #4ec9b0; 
+    border-radius: 4px; 
+}
+
+.telemetry-header { 
+    color: #4ec9b0; 
+    margin-top: 0; 
+    font-size: 1.1em; 
+    border-bottom: 1px solid #4ec9b0; 
+    padding-bottom: 8px; 
+    margin-bottom: 15px; 
+    text-transform: uppercase; 
+    letter-spacing: 1px;
+}
+
+.telemetry-item { 
+    font-family: "Courier New", Courier, monospace; 
+    color: #ce9178; 
+    margin-bottom: 10px; 
+    font-size: 0.85em; 
+    background: #1e1e1e; 
+    padding: 8px; 
+    border-left: 3px solid #ce9178; 
+}
+
+/* Typography & Colors */
+.msg { margin-bottom: 10px; line-height: 1.4; }
+.system { color: #569cd6; }
+.agent { color: #ce9178; }
+.human { color: #4ec9b0; }
+.error { color: #f44747; }
+
+/* Controls */
+.input-area { 
+    display: flex; 
+    gap: 10px; 
+}
+
+input, button { 
+    padding: 12px; 
+    background: #3c3c3c; 
+    border: 1px solid #555; 
+    color: white; 
+    border-radius: 4px; 
+}
+
+input { flex: 1; font-size: 1em; }
+
+button { 
+    cursor: pointer; 
+    background: #0e639c; 
+    border: none; 
+    font-weight: bold; 
+    transition: background 0.2s; 
+}
+
+button:hover { background: #1177bb; }
